@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "rn-app",
-    "slug": "rn-app",
+    "name": "tinnering",
+    "slug": "context-aware-ai-journaling-system",
+    "owner": "tinnering"
     "version": "1.0.1",
     "runtimeVersion": {
       "policy": "appVersion"
