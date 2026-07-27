@@ -1,5 +1,6 @@
 // Event Layer Component - Timeline display and management
 // Restored: Automatic Location & Weather tracking upon App Launch + Manual/Photo handling.
+// ...
 
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
