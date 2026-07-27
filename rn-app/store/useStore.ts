@@ -10,6 +10,7 @@ export interface EventItem {
     isManual: boolean;
     isPhoto?: boolean;
     additional_info?: string;
+    location?: string;
     weather?: string;
     temperature?: string;
     mood?: MoodType;

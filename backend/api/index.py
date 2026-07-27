@@ -49,6 +49,45 @@ class EventEntry(BaseModel):
 def health():
     return {"status": "ok"}
 
+class CurrentContextRequest(BaseModel):
+    latitude: float
+    longitude: float
+
+@app.post("/get_current_context")
+async def get_current_context(data: CurrentContextRequest):
+    """
+    Returns location name and weather for given GPS coordinates.
+    Used by the auto-tracker on app open.
+    """
+    try:
+        # 1. Reverse geocode to get location name
+        geo_res = reverse_geocode_amap(data.longitude, data.latitude)
+        if geo_res.get("status") != "1":
+            # Fallback: return coordinates as location name
+            return {
+                "location_name": f"{data.latitude:.2f}, {data.longitude:.2f}",
+                "weather_condition": "Unknown",
+                "temperature": "N/A"
+            }
+        
+        location_name = geo_res.get("formatted_address", f"{data.latitude:.2f}, {data.longitude:.2f}")
+        poi = geo_res.get("top_poi")
+        if poi:
+            location_name = poi  # Prefer POI name over raw address
+        
+        # 2. Get weather
+        adcode = geo_res.get("adcode")
+        weather_data = get_weather_amap(adcode)
+        
+        return {
+            "location_name": location_name,
+            "weather_condition": weather_data.get("weather", "Unknown"),
+            "temperature": weather_data.get("temperature", "N/A")
+        }
+    except Exception as e:
+        print(f"[get_current_context] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/interpret")
 async def interpret_event(event: EventEntry):
     """
@@ -87,15 +126,27 @@ async def analyze_photo(data: PhotoAnalyzeRequest):
     Uses Qwen VL to analyze a photo and return an event title.
     """
     try:
-        print(f"[{data.user_id}] [Analyze Photo] Request received")
+        print(f"[{data.user_id}] [Analyze Photo] Request received, image length: {len(data.base64_image) if data.base64_image else 0} chars")
+        
+        if not data.base64_image or len(data.base64_image) < 100:
+            print(f"[{data.user_id}] [Analyze Photo] ERROR: base64_image is empty or too short")
+            raise HTTPException(status_code=400, detail="No valid image data provided. The image may have been too small or corrupted.")
+        
         title, description = generate_title_from_image(data.base64_image)
+        
+        print(f"[{data.user_id}] [Analyze Photo] Result - title: {title!r}, description: {description[:100]!r}...")
+        
         return {
             "success": True,
             "title": title,
             "description": description
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Photo analysis error: {e}")
+        print(f"[{data.user_id}] Photo analysis error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 class FilterLocationRequest(BaseModel):

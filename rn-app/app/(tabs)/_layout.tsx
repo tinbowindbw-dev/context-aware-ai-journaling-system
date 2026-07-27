@@ -1,4 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import { GlassTabBar } from '../../components/TabBar';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as Location from 'expo-location';
 import { Tabs } from 'expo-router';
@@ -159,15 +160,22 @@ const checkAndFilterLocation = async (isForegroundTrigger: boolean = false) => {
     };
 
     if (Platform.OS === 'android') {
-      console.log("[Location] Using Android native LocationManager (system provider)...");
+      console.log("[Location] Trying Android native LocationManager...");
       try {
         const providerInfo = await getProviderInfoNative();
         console.log("[Location] Provider info:", JSON.stringify(providerInfo));
       } catch (infoErr) {
         console.warn("[Location] Could not get provider info:", infoErr);
       }
-      location = await getCurrentPositionNative();
-      console.log(`[Location] Native provider used: ${location.provider}`);
+      try {
+        location = await getCurrentPositionNative();
+        console.log(`[Location] Native provider used: ${location.provider}`);
+      } catch (nativeErr) {
+        console.warn("[Location] Native module unavailable, falling back to expo-location:", nativeErr);
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+      }
     } else {
       console.log("[Location] Using expo-location (iOS)...");
       location = await Location.getCurrentPositionAsync({
@@ -544,10 +552,13 @@ export default function TabLayout() {
   }, [_hasHydrated]);
 
   return (
-    <Tabs screenOptions={{
-      tabBarActiveTintColor: '#000',
-      headerShown: false,
-    }}>
+    <Tabs
+      tabBar={(props) => <GlassTabBar {...props} />}
+      screenOptions={{
+        tabBarActiveTintColor: '#000',
+        headerShown: false,
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{

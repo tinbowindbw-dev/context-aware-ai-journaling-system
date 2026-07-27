@@ -49,10 +49,21 @@ def translate_location_to_en(location_input: str) -> str:
 def generate_title_from_image(base64_image: str) -> tuple[str, str]:
     """
     Analyzes an image and returns a short event title and detailed description using Qwen.
+    Raises on failure instead of silently returning a static placeholder, so the caller
+    (backend/api/index.py's /analyze_photo endpoint) can surface the real error to the
+    client/logs instead of every photo looking identical ("Photo Event").
     """
+    import traceback
+
+    if not QWEN_API_KEY:
+        raise RuntimeError("QWEN_API_KEY is not configured on the server.")
+
+    if not base64_image:
+        raise ValueError("No image data (base64_image) was provided.")
+
     # Set longer timeouts for large image uploads
     socket.setdefaulttimeout(120.0)
-    
+
     # Check if the base64 string already has the prefix, add it if not
     if not base64_image.startswith("data:image/"):
         image_url = f"data:image/jpeg;base64,{base64_image}"
@@ -62,7 +73,7 @@ def generate_title_from_image(base64_image: str) -> tuple[str, str]:
     client = OpenAI(
         api_key=QWEN_API_KEY,
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        timeout=120.0,
+        timeout=90.0,
     )
 
     messages = [
@@ -70,11 +81,11 @@ def generate_title_from_image(base64_image: str) -> tuple[str, str]:
             "role": "user",
             "content": [
                 {
-                    "type": "image_url", 
+                    "type": "image_url",
                     "image_url": {"url": image_url}
                 },
                 {
-                    "type": "text", 
+                    "type": "text",
                     "text": "What event is happening in this photo? Summarize it as a short English event title (max 5 words, e.g., 'Having coffee', 'Working at office', 'Walking in the park', 'Cooking dinner'). Also, provide a detailed description of the photo to be used as context for a diary entry. Do not use Chinese characters. Output format MUST BE JSON: {\"title\": \"<short title>\", \"description\": \"<detailed description>\"}"
                 }
             ]
@@ -83,29 +94,34 @@ def generate_title_from_image(base64_image: str) -> tuple[str, str]:
 
     try:
         completion = client.chat.completions.create(
-            # qwen-vl-plus is the Vision-Language model needed for parsing image_urls
-            model="qwen-vl-plus", 
+            # qwen-vl-max is the latest Vision-Language model for image analysis
+            model="qwen-vl-max",
             messages=messages,
-            temperature=0.1
+            temperature=0.4
         )
-        content = completion.choices[0].message.content.strip()
-        
-        # Clean up any potential markdown json blocks
-        if content.startswith("```json"):
-            content = content.replace("```json", "").replace("```", "").strip()
-        elif content.startswith("```"):
-            content = content.replace("```", "").strip()
-            
-        try:
-            parsed = json.loads(content)
-            return parsed.get("title", "Photo Event").strip(), parsed.get("description", "A photo uploaded by the user.").strip()
-        except json.JSONDecodeError:
-            print(f"Failed to parse Qwen JSON response: {content}")
-            return "Photo Event", "A photo uploaded by the user."
-            
     except Exception as e:
-        print(f"Qwen Vision Error: {e}")
-        return "Photo Event", "A photo uploaded by the user."
+        print(f"[Qwen Vision Error] API call failed: {e}")
+        traceback.print_exc()
+        raise RuntimeError(f"Qwen Vision API call failed: {e}")
+
+    content = (completion.choices[0].message.content or "").strip()
+    print(f"[Qwen Vision Debug] Raw response content: {content[:500]!r}")
+
+    # Clean up any potential markdown json blocks
+    if content.startswith("```json"):
+        content = content.replace("```json", "").replace("```", "").strip()
+    elif content.startswith("```"):
+        content = content.replace("```", "").strip()
+
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError as e:
+        print(f"[Qwen Vision Error] Failed to parse JSON response: {content!r}")
+        raise RuntimeError(f"Qwen Vision returned an unparsable response: {content[:200]!r}") from e
+
+    title = (parsed.get("title") or "Photo Event").strip()
+    description = (parsed.get("description") or "A photo uploaded by the user.").strip()
+    return title, description
 
 
 def generate_interpretation_from_event(title: str, time: str = None, additional_info: str = None) -> str:
@@ -481,5 +497,3 @@ def generate_story_from_clips(clips_text: str, style: str = "Reflective", event_
     except Exception as e:
         print(f"Story Generation Error: {e}")
         return {"story_text": "Failed to generate story. Please try again."}
-
-    #push

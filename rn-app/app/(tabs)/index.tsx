@@ -1,7 +1,11 @@
+// Event Layer Component - Timeline display and management
+// Restored: Automatic Location & Weather tracking upon App Launch + Manual/Photo handling.
+
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
+import * as Location from 'expo-location';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,25 +19,14 @@ import {
   View
 } from 'react-native';
 import { API_URL } from '../../constants/Config';
-
-
-
 import { useStore } from '../../store/useStore';
 
-// Accessing the interface from the store file if needed, or letting type inference work.
-// But the component uses explicit types in some places, so let's import it or just rely on the hook.
-// The code I replaced above removed the usage of `EventItem` in `newEvent: EventItem` annotation?
-// Ah, I removed the `const newEvent: EventItem =` line in the previous replacement and just passed object to `addEvent`.
-// Only `events` usage might need type, but `useStore` types it.
-// So I can remove the interface.
-
 export default function EventLayer() {
-  // Use global store
-  const { events, addEvent, renameEvent, deleteEvent } = useStore();
+  const { events, addEvent, renameEvent, deleteEvent, _hasHydrated } = useStore();
 
   const [showInput, setShowInput] = useState(false);
   const [manualTitle, setManualTitle] = useState('');
-  const [date, setDate] = useState(new Date()); // Back to Date object
+  const [date, setDate] = useState(new Date());
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   // Rename Logic State
@@ -44,27 +37,87 @@ export default function EventLayer() {
   // Photo Upload State
   const [uploadingSource, setUploadingSource] = useState<'camera' | 'library' | null>(null);
 
+  // Highlights Modal State
+  const [showHighlights, setShowHighlights] = useState(false);
+  const [isLoadingHighlights, setIsLoadingHighlights] = useState(false);
+  const [highlightsContent, setHighlightsContent] = useState('');
+
+  // --- AUTOMATIC LOCATION & WEATHER TRACKER ON APP OPEN ---
+  useEffect(() => {
+    const trackCurrentLocationAndWeather = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('Location permission denied for automatic event.');
+          return;
+        }
+
+        const currentLocation = await Location.getCurrentPositionAsync({});
+        const { latitude, longitude } = currentLocation.coords;
+
+        // Fetch location name and weather from backend API
+        const response = await fetch(`${API_URL}/get_current_context`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ latitude, longitude }),
+        });
+
+        const now = new Date();
+        const currentTimeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+        if (response.ok) {
+          const data = await response.json();
+          addEvent({
+            id: Date.now().toString(),
+            time: currentTimeStr,
+            title: data.location_name || "Current Location",
+            location: data.location_name || "Current Location",
+            weather: data.weather_condition || "Sunny",
+            temperature: String(data.temperature || 26),
+            isManual: false,
+            timestamp: now.getTime(),
+          });
+        } else {
+          // Fallback if backend context API is not yet responding
+          addEvent({
+            id: Date.now().toString(),
+            time: currentTimeStr,
+            title: "Current Status Updated",
+            location: `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
+            weather: "Sunny",
+            temperature: "25",
+            isManual: false,
+            timestamp: now.getTime(),
+          });
+        }
+      } catch (error) {
+        console.log("Auto location tracking error:", error);
+      }
+    };
+
+    // Run automatically on app open if no event was logged in the last hour
+    if (!_hasHydrated) return;
+    const lastEvent = events[events.length - 1];
+    const isRecent = lastEvent && (Date.now() - lastEvent.timestamp < 3600000);
+    if (!isRecent) {
+      trackCurrentLocationAndWeather();
+    }
+  }, [_hasHydrated]);
+
   const confirmDelete = (id: string) => {
     Alert.alert(
       "Delete Event",
       "Are you sure you want to remove this event from your log?",
       [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => deleteEvent(id)
-        }
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: () => deleteEvent(id) }
       ]
     );
   };
 
   const onTimeChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
-      setShowTimePicker(false); // Close modal on Android
+      setShowTimePicker(false);
     }
     if (selectedDate) {
       setDate(selectedDate);
@@ -83,16 +136,14 @@ export default function EventLayer() {
       return;
     }
 
-    // Use derived string from date object
     const formattedTime = getFormattedTime();
 
-    // Add to global store
     addEvent({
       id: Date.now().toString(),
       time: formattedTime,
       title: manualTitle,
       isManual: true,
-      timestamp: date.getTime(), // Use the user-selected time!
+      timestamp: date.getTime(),
     });
 
     setManualTitle('');
@@ -103,10 +154,10 @@ export default function EventLayer() {
     try {
       let result;
       const options = {
-        allowsEditing: true, // Enable editing to help reduce image resolution on device
+        allowsEditing: false,
         base64: true,
         exif: true,
-        quality: 0.1,
+        quality: 0.7,
       };
 
       if (source === 'camera') {
@@ -138,18 +189,24 @@ export default function EventLayer() {
       const base64 = asset.base64;
       const exif = asset.exif;
 
-      // Photo events should default to the capture/upload time, not manual picker state.
       const now = new Date();
       let eventTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
       let eventTimestamp = now.getTime();
 
+      let latitude = null;
+      let longitude = null;
+
       if (exif) {
-        // EXIF DateTime format usually like '2023:04:12 10:20:30'
+        if (exif.GPSLatitude && exif.GPSLongitude) {
+          latitude = exif.GPSLatitude;
+          longitude = exif.GPSLongitude;
+        }
+
         const dateTimeStr = exif.DateTimeOriginal || exif.DateTime;
         if (dateTimeStr) {
           const parts = dateTimeStr.split(' ');
           if (parts.length === 2) {
-            const timePart = parts[1]; // '10:20:30'
+            const timePart = parts[1];
             const timeParts = timePart.split(':');
             if (timeParts.length >= 2) {
               eventTime = `${timeParts[0]}:${timeParts[1]}`;
@@ -163,126 +220,339 @@ export default function EventLayer() {
         }
       }
 
+      // Vision AI Analysis Request with GPS data attached
       const response = await fetch(`${API_URL}/analyze_photo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           user_id: useStore.getState().userName,
-          base64_image: base64 
+          base64_image: base64,
+          gps: latitude && longitude ? { latitude, longitude } : null
         })
       });
 
       const data = await response.json();
-      if (data.success && data.title) {
+      
+      if (response.ok && data.success) {
+        // Check if AI analysis returned meaningful results (not just fallback defaults)
+        const isTitleFallback = !data.title || data.title === 'Photo Event';
+        const isDescriptionFallback = !data.description || data.description === 'A photo uploaded by the user.';
+        
+        if (isTitleFallback && isDescriptionFallback) {
+          // AI analysis produced no meaningful result, but the photo was uploaded successfully
+          Alert.alert(
+            "AI Analysis Incomplete",
+            "The image was uploaded but the AI could not analyze its content. It will be saved as a generic photo event.",
+            [{ text: "OK" }]
+          );
+        }
+
+        const finalTitle = (!isTitleFallback) 
+          ? data.title 
+          : (data.description || 'Photo Event');
+
         addEvent({
           id: Date.now().toString(),
           time: eventTime,
-          title: data.title,
+          title: finalTitle,
+          location: data.location || undefined,
+          weather: data.weather || undefined,
+          temperature: data.temperature || undefined,
           isManual: true,
           isPhoto: true,
-          additional_info: data.description,
+          additional_info: data.description || '',
           timestamp: eventTimestamp,
         });
       } else {
-        Alert.alert("Error", "Failed to analyze the photo.");
+        // Server returned an error response
+        const errorMsg = data.detail || `Server error (HTTP ${response.status})`;
+        Alert.alert("Analysis Failed", `Unable to analyze the photo: ${errorMsg}`);
+        // Still save the photo as a basic event so the user doesn't lose it
+        addEvent({
+          id: Date.now().toString(),
+          time: eventTime,
+          title: "Photo Event",
+          isManual: true,
+          isPhoto: true,
+          timestamp: eventTimestamp,
+        });
       }
     } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "An unexpected error occurred while analyzing the photo.");
+      console.error("Photo Analysis Error:", error);
+      const errorMessage = error instanceof TypeError && error.message === 'Network request failed'
+        ? "Cannot reach the AI server. Please check your internet connection and try again."
+        : `An unexpected error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      Alert.alert("Connection Error", errorMessage);
     } finally {
       setUploadingSource(null);
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
-    >
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>EVENT</Text>
-        <Text style={styles.dateTitle}>{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
-      </View>
+  const userName = useStore((state) => state.userName) || 'User';
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {events.slice().sort((a, b) => a.timestamp - b.timestamp).map((event) => (
-          <View key={event.id} style={styles.eventBox}>
-            <Text style={styles.timeText}>{event.time}</Text>
-              <View style={styles.eventRow}>
-                <View style={styles.iconCircle}>
-                  <Ionicons
-                    name={event.isPhoto ? "image-outline" : (event.isManual ? "create-outline" : "location-outline")}
-                    size={20}
-                    color="black"
-                  />
-                </View>
-                <View style={styles.textColumn}>
-                  <Text style={styles.eventTitle}>{event.title}</Text>
-                  {event.weather && event.weather !== 'Unknown' && (
-                    <View style={styles.weatherBadge}>
-                      <Ionicons
-                        name={event.weather.includes('雨') || event.weather.includes('Rain') ? "rainy-outline" : "sunny-outline"}
-                        size={12}
-                        color="#666"
-                      />
-                      <Text style={styles.weatherText}>{event.weather}, {event.temperature}°C</Text>
-                    </View>
-                  )}
+  // Condensed AI Reflection: max 3 sentences, just a quick day overview
+  const generateAIReflection = () => {
+    if (events.length === 0) {
+      return "Your day is a fresh canvas. Capture your first moment above to begin today's reflection.";
+    }
+    const count = events.length;
+    const uniqueLocations = [...new Set(events.filter(e => e.location).map(e => e.location))];
+    const hasPhotos = events.some(e => e.isPhoto);
+    
+    let summary = `You've captured ${count} moment${count > 1 ? 's' : ''} today`;
+    if (uniqueLocations.length > 0) {
+      summary += ` across ${uniqueLocations.length} location${uniqueLocations.length > 1 ? 's' : ''}`;
+    }
+    if (hasPhotos) summary += `, including photos`;
+    summary += '.';
+    return summary;
+  };
+
+  // Fetch full AI analysis for Highlights modal
+  const fetchHighlights = async () => {
+    setShowHighlights(true);
+    setIsLoadingHighlights(true);
+    setHighlightsContent('');
+
+    if (events.length === 0) {
+      setHighlightsContent("No events captured yet today. Start by adding your first moment!");
+      setIsLoadingHighlights(false);
+      return;
+    }
+
+    try {
+      // Build a summary of all today's events for the AI
+      const eventsSummary = events
+        .slice()
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .map(e => {
+          let line = `[${e.time}] ${e.title}`;
+          if (e.location) line += ` — at ${e.location}`;
+          if (e.weather) line += ` | ${e.weather}${e.temperature ? ` ${e.temperature}°C` : ''}`;
+          if (e.additional_info) line += ` | ${e.additional_info}`;
+          return line;
+        })
+        .join('\n');
+
+      const response = await fetch(`${API_URL}/interpret`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userName,
+          title: `Daily Summary: ${events.length} events`,
+          time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          additional_info: eventsSummary,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          setHighlightsContent(data.data.interpretation);
+        } else {
+          setHighlightsContent("AI analysis is not available right now. Here's your day at a glance:\n\n" + eventsSummary);
+        }
+      } else {
+        setHighlightsContent("Unable to generate analysis. Here's your day at a glance:\n\n" + eventsSummary);
+      }
+    } catch (error) {
+      console.error("Highlights fetch error:", error);
+      // Fallback: show events summary without AI
+      const fallback = events
+        .slice()
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .map(e => `• ${e.time} — ${e.title}`)
+        .join('\n');
+      setHighlightsContent("AI analysis unavailable. Here's a quick recap:\n\n" + fallback);
+    } finally {
+      setIsLoadingHighlights(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.greetingSubText}>Good Day,</Text>
+          <Text style={styles.headerDateTitle}>
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+          </Text>
+        </View>
+
+        {/* AI Reflection Card */}
+        <View style={styles.aiReflectionCard}>
+          <View style={styles.aiHeaderRow}>
+            <Ionicons name="sparkles" size={16} color="#585594" />
+            <Text style={styles.aiReflectionBadge}>AI Reflection</Text>
+          </View>
+          <Text style={styles.aiGreetingText}>Good Day, {userName}</Text>
+          <Text style={styles.aiQuoteText}>
+            "{generateAIReflection()}"
+          </Text>
+          <View style={styles.aiFooterRow}>
+            <View style={styles.weatherBadgesGroup}>
+              <View style={[styles.microBadge, { backgroundColor: '#c1ebe7' }]}>
+                <Ionicons name="sunny-outline" size={12} color="#00201e" />
+              </View>
+              <View style={[styles.microBadge, { backgroundColor: '#e3dfff', marginLeft: -6 }]}>
+                <Ionicons name="water-outline" size={12} color="#16114f" />
+              </View>
+            </View>
+            <TouchableOpacity style={styles.highlightsBtn} activeOpacity={0.7} onPress={fetchHighlights}>
+              <Text style={styles.highlightsText}>Highlights</Text>
+              <Ionicons name="chevron-forward" size={14} color="#585594" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Quick Actions */}
+        {showInput ? (
+          <View style={styles.inputCard}>
+            <Text style={styles.inputCardHeader}>Capture a Moment</Text>
+            <TextInput
+              style={styles.inputField}
+              placeholder="What's on your mind right now?"
+              placeholderTextColor="#787681"
+              value={manualTitle}
+              onChangeText={setManualTitle}
+              multiline
+            />
+            <View style={styles.pickerContainer}>
+              {Platform.OS === 'ios' && (
+                <DateTimePicker value={date} mode="time" display="spinner" onChange={onTimeChange} style={styles.timePicker} />
+              )}
+              {Platform.OS === 'android' && (
+                <TouchableOpacity onPress={() => setShowTimePicker(true)} style={styles.androidTimeBtn}>
+                  <Text style={styles.androidTimeText}>{getFormattedTime()}</Text>
+                  <Ionicons name="time-outline" size={18} color="#585594" />
+                </TouchableOpacity>
+              )}
+              {Platform.OS === 'android' && showTimePicker && (
+                <DateTimePicker value={date} mode="time" display="spinner" onChange={onTimeChange} />
+              )}
+            </View>
+            <View style={styles.inputActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowInput(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={addManualEvent}>
+                <Text style={styles.confirmBtnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.quickActionsGrid}>
+            <TouchableOpacity 
+              style={styles.actionCardBtn} 
+              onPress={() => setShowInput(true)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.actionIconCircle}>
+                <Ionicons name="create-outline" size={20} color="#585594" />
+              </View>
+              <Text style={styles.actionCardText}>Capture</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.actionCardBtn} 
+              onPress={() => handlePhotoEvent('camera')}
+              disabled={uploadingSource !== null}
+              activeOpacity={0.85}
+            >
+              <View style={styles.actionIconCircle}>
+                {uploadingSource === 'camera' ? (
+                  <ActivityIndicator size="small" color="#585594" />
+                ) : (
+                  <Ionicons name="camera-outline" size={20} color="#585594" />
+                )}
+              </View>
+              <Text style={styles.actionCardText}>
+                {uploadingSource === 'camera' ? 'Scanning' : 'Take Photo'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.actionCardBtn} 
+              onPress={() => handlePhotoEvent('library')}
+              disabled={uploadingSource !== null}
+              activeOpacity={0.85}
+            >
+              <View style={styles.actionIconCircle}>
+                {uploadingSource === 'library' ? (
+                  <ActivityIndicator size="small" color="#585594" />
+                ) : (
+                  <Ionicons name="image-outline" size={20} color="#585594" />
+                )}
+              </View>
+              <Text style={styles.actionCardText}>
+                {uploadingSource === 'library' ? 'Scanning' : 'Upload'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Timeline Event List */}
+        <Text style={styles.timelineSectionTitle}>Today's Journey</Text>
+
+        <View style={styles.timelineList}>
+          {events.slice().sort((a, b) => b.timestamp - a.timestamp).map((event) => (
+            <View key={event.id} style={styles.journeyCard}>
+              <View style={styles.journeyHeaderRow}>
+                <View style={styles.journeyTimeGroup}>
+                  <Text style={styles.journeyTimeText}>{event.time}</Text>
+                  <View style={styles.journeyMetaColumn}>
+                    {event.location && (
+                      <Text style={styles.journeyLocationText}>{event.location}</Text>
+                    )}
+                    {event.weather && (
+                      <Text style={styles.journeyWeatherText}>
+                        {event.weather}{event.temperature ? `, ${event.temperature}°C` : ''}
+                      </Text>
+                    )}
+                  </View>
                 </View>
 
                 <TouchableOpacity
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   onPress={() => {
-                    Alert.alert(
-                      "Event Options",
-                      "Choose an action",
-                      [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Rename",
-                          onPress: () => {
-                            setEventToRename({ id: event.id, title: event.title });
-                            setTempRenameTitle(event.title);
-                            setIsRenameModalVisible(true);
-                          }
-                        },
-                        { text: "Delete", style: "destructive", onPress: () => confirmDelete(event.id) }
-                      ]
-                    );
+                    Alert.alert("Memory Options", "Manage this event", [
+                      { text: "Cancel", style: "cancel" },
+                      { text: "Rename", onPress: () => { setEventToRename({ id: event.id, title: event.title }); setTempRenameTitle(event.title); setIsRenameModalVisible(true); } },
+                      { text: "Delete", style: "destructive", onPress: () => confirmDelete(event.id) }
+                    ]);
                   }}
                 >
-                  <Ionicons name="ellipsis-horizontal" size={22} color="#666" />
+                  <Ionicons name="ellipsis-horizontal" size={18} color="#c8c5d1" />
                 </TouchableOpacity>
+              </View>
+
+              <View style={styles.journeyBodyRow}>
+                <View style={styles.journeyIconWrapper}>
+                  <Ionicons
+                    name={event.isPhoto ? "image-outline" : "bookmark-outline"}
+                    size={16}
+                    color="#585594"
+                  />
+                </View>
+                <Text style={styles.journeyTitleText}>{event.title}</Text>
               </View>
             </View>
           ))}
+        </View>
 
         {/* Rename Modal */}
         {isRenameModalVisible && (
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalHeader}>Rename Event</Text>
-              <TextInput
-                style={styles.renameInput}
-                value={tempRenameTitle}
-                onChangeText={setTempRenameTitle}
-                autoFocus
-              />
+              <Text style={styles.modalHeader}>Rename Log</Text>
+              <TextInput style={styles.renameInput} value={tempRenameTitle} onChangeText={setTempRenameTitle} autoFocus />
               <View style={styles.modalActions}>
-                <TouchableOpacity
-                  onPress={() => setIsRenameModalVisible(false)}
-                  style={styles.modalCancelBtn}
-                >
+                <TouchableOpacity onPress={() => setIsRenameModalVisible(false)} style={styles.modalCancelBtn}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (eventToRename) {
-                      renameEvent(eventToRename.id, tempRenameTitle);
-                    }
-                    setIsRenameModalVisible(false);
-                  }}
-                  style={styles.modalConfirmBtn}
-                >
+                <TouchableOpacity onPress={() => { if (eventToRename) renameEvent(eventToRename.id, tempRenameTitle); setIsRenameModalVisible(false); }} style={styles.modalConfirmBtn}>
                   <Text style={styles.modalConfirmText}>Save</Text>
                 </TouchableOpacity>
               </View>
@@ -290,200 +560,196 @@ export default function EventLayer() {
           </View>
         )}
 
-        {showInput ? (
-          <View style={styles.inputCard}>
-            <TextInput
-              style={styles.inputField}
-              placeholder="Event Title (e.g. Meeting)"
-              placeholderTextColor="#666"
-              value={manualTitle}
-              onChangeText={setManualTitle}
-            />
-
-            <View style={styles.pickerContainer}>
-              <Text style={styles.label}>Select Time:</Text>
-
-              {/* iOS: Inline Spinner */}
-              {Platform.OS === 'ios' && (
-                <DateTimePicker
-                  value={date}
-                  mode="time"
-                  display="spinner"
-                  onChange={onTimeChange}
-                  style={styles.timePicker}
-                  textColor="#000000"
-                />
-              )}
-
-              {/* Android: Button triggers Modal with Spinner style */}
-              {Platform.OS === 'android' && (
-                <View>
-                  <TouchableOpacity
-                    onPress={() => setShowTimePicker(true)}
-                    style={styles.androidTimeBtn}
-                  >
-                    <Text style={styles.androidTimeText}>{getFormattedTime()}</Text>
-                    <Ionicons name="time-outline" size={20} color="#000" />
-                  </TouchableOpacity>
-
-                  {showTimePicker && (
-                    <DateTimePicker
-                      value={date}
-                      mode="time"
-                      display="spinner"
-                      onChange={onTimeChange}
-                    />
-                  )}
-                </View>
-              )}
-            </View>
-
-            <View style={styles.inputActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowInput(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmBtn} onPress={addManualEvent}>
-                <Text style={styles.confirmBtnText}>Add Event</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : (
-          <View>
-            <TouchableOpacity
-              style={styles.addTriggerBtn}
-              onPress={() => setShowInput(true)}
-              disabled={uploadingSource !== null}
-            >
-              <Ionicons name="add-circle" size={24} color="black" />
-              <Text style={styles.addTriggerText}>ADD MANUAL EVENT</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.addTriggerBtn, uploadingSource !== null && { opacity: 0.5 }]}
-              onPress={() => handlePhotoEvent('camera')}
-              disabled={uploadingSource !== null}
-            >
-              {uploadingSource === 'camera' ? (
-                <ActivityIndicator size="small" color="#000" />
-              ) : (
-                <Ionicons name="camera-outline" size={24} color="black" />
-              )}
-              <Text style={styles.addTriggerText}>
-                {uploadingSource === 'camera' ? "ANALYZING PHOTO..." : "TAKE A PHOTO"}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.addTriggerBtn, uploadingSource !== null && { opacity: 0.5 }]}
-              onPress={() => handlePhotoEvent('library')}
-              disabled={uploadingSource !== null}
-            >
-              {uploadingSource === 'library' ? (
-                <ActivityIndicator size="small" color="#000" />
-              ) : (
-                <Ionicons name="image-outline" size={24} color="black" />
-              )}
-              <Text style={styles.addTriggerText}>
-                {uploadingSource === 'library' ? "ANALYZING PHOTO..." : "UPLOAD PHOTO"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </ScrollView>
+
+      {/* Highlights Modal — Full AI Analysis */}
+      {showHighlights && (
+        <View style={styles.highlightsOverlay}>
+          <View style={styles.highlightsFullContent}>
+            <View style={styles.highlightsModalHeader}>
+              <View style={styles.highlightsTitleRow}>
+                <Ionicons name="sparkles" size={18} color="#585594" />
+                <Text style={styles.highlightsModalTitle}>Today's Highlights</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowHighlights(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color="#787681" />
+              </TouchableOpacity>
+            </View>
+            {isLoadingHighlights ? (
+              <View style={styles.highlightsLoadingArea}>
+                <ActivityIndicator size="small" color="#585594" />
+                <Text style={styles.highlightsLoadingText}>Generating your daily analysis...</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.highlightsScrollArea} showsVerticalScrollIndicator={false}>
+                <Text style={styles.highlightsContentText}>{highlightsContent}</Text>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#E9EEF0' },
-  header: { paddingTop: 60, paddingBottom: 20, alignItems: 'center' },
-  headerTitle: { fontSize: 24, fontWeight: '900', letterSpacing: 2, color: '#000' },
-  dateTitle: {
-    fontSize: 42,
-    fontWeight: '300',
-    color: '#333',
-    marginTop: 4,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  container: { flex: 1, backgroundColor: '#fbf9f4' },
+  scrollContent: { paddingHorizontal: 18, paddingTop: 50, paddingBottom: 80 },
+
+  header: { marginBottom: 16 },
+  greetingSubText: { fontSize: 16, color: '#787681', fontWeight: '500' },
+  headerDateTitle: { fontSize: 32, fontWeight: '700', color: '#1b1c19', marginTop: 2 },
+
+  aiReflectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    elevation: 3,
+    marginBottom: 20,
   },
-  scrollContent: { paddingHorizontal: 25, paddingBottom: 60 },
-  eventBox: { marginBottom: 30 },
-  timeText: {
-    fontSize: 42,
-    fontWeight: '300',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    color: '#333',
-    marginBottom: 5
-  },
-  eventRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  iconCircle: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, justifyContent: 'center', alignItems: 'center', marginRight: 15, backgroundColor: 'white' },
-  textColumn: { flex: 1 },
-  eventTitle: { fontSize: 18, fontWeight: '700', color: '#000' },
-  weatherBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  weatherText: { fontSize: 12, color: '#666', marginLeft: 4, fontWeight: '500' },
-
-  addTriggerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20, borderWidth: 1, borderColor: '#000', borderStyle: 'dashed', borderRadius: 12, marginTop: 10 },
-  addTriggerText: { marginLeft: 10, fontWeight: 'bold', letterSpacing: 1, color: '#000' },
-
-  inputCard: { backgroundColor: '#fff', padding: 20, borderRadius: 15, borderWidth: 1, borderColor: '#ccc', marginTop: 10 },
-  inputField: { borderBottomWidth: 1, borderColor: '#000', paddingVertical: 10, marginBottom: 15, fontSize: 18, color: '#000' },
-
-  pickerContainer: { marginBottom: 15, alignItems: 'center' },
-  label: { fontSize: 16, color: '#000', fontWeight: '600', marginBottom: 5, alignSelf: 'flex-start' },
-  timePicker: { width: '100%', height: 120 },
-
-  inputActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10 },
-  cancelBtn: { padding: 10, marginRight: 10 },
-  cancelBtnText: { color: '#666', fontSize: 16 },
-  confirmBtn: { backgroundColor: '#000', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8 },
-  confirmBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-
-  // New Styles for Android
-  androidTimeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#f0f0f0',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd'
-  },
-  androidTimeText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000'
-  },
-  // Modal Styles
-  modalOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  aiHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  aiReflectionBadge: { fontSize: 12, fontWeight: '700', color: '#706eaf', marginLeft: 6 },
+  aiGreetingText: { fontSize: 18, fontWeight: '700', color: '#1b1c19', marginBottom: 6 },
+  aiQuoteText: { fontSize: 14, fontStyle: 'italic', color: '#474650', lineHeight: 22, marginBottom: 14 },
+  aiFooterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  weatherBadgesGroup: { flexDirection: 'row', alignItems: 'center' },
+  microBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1000,
   },
-  modalContent: {
-    width: '80%',
-    backgroundColor: 'white',
+  highlightsBtn: { flexDirection: 'row', alignItems: 'center' },
+  highlightsText: { fontSize: 12, fontWeight: '600', color: '#585594', marginRight: 2 },
+
+  quickActionsGrid: { flexDirection: 'row', gap: 10, marginBottom: 24 },
+  actionCardBtn: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 25,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+  },
+  actionIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e3dfff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  actionCardText: { fontSize: 12, fontWeight: '600', color: '#1b1c19' },
+
+  timelineSectionTitle: { fontSize: 18, fontWeight: '700', color: '#1b1c19', marginBottom: 12, paddingLeft: 2 },
+  timelineList: { gap: 12 },
+  journeyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    elevation: 2,
+  },
+  journeyHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  journeyTimeGroup: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  journeyTimeText: { fontSize: 28, fontWeight: '700', color: '#585594' },
+  journeyMetaColumn: { justifyContent: 'center' },
+  journeyLocationText: { fontSize: 13, fontWeight: '700', color: '#474650' },
+  journeyWeatherText: { fontSize: 11, color: '#787681', marginTop: 1 },
+  journeyBodyRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 10 },
+  journeyIconWrapper: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#e3dfff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  journeyTitleText: { fontSize: 14, fontWeight: '500', color: '#1b1c19', flex: 1 },
+
+  inputCard: { backgroundColor: '#FFFFFF', padding: 18, borderRadius: 20, elevation: 3, marginBottom: 20 },
+  inputCardHeader: { fontSize: 16, fontWeight: '700', color: '#1b1c19', marginBottom: 12 },
+  inputField: { backgroundColor: '#f5f3ee', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#1b1c19', minHeight: 70, textAlignVertical: 'top', marginBottom: 14 },
+  pickerContainer: { marginBottom: 14 },
+  timePicker: { width: '100%', height: 90 },
+  androidTimeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f5f3ee', padding: 12, borderRadius: 12 },
+  androidTimeText: { fontSize: 14, fontWeight: '600', color: '#1b1c19' },
+  inputActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  cancelBtn: { paddingVertical: 8, paddingHorizontal: 14 },
+  cancelBtnText: { color: '#787681', fontSize: 14, fontWeight: '600' },
+  confirmBtn: { backgroundColor: '#585594', paddingVertical: 8, paddingHorizontal: 18, borderRadius: 10 },
+  confirmBtnText: { color: '#FFF', fontWeight: '600', fontSize: 14 },
+
+  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(27,28,25,0.4)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+  modalContent: { width: '85%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, elevation: 5 },
+  modalHeader: { fontSize: 16, fontWeight: '700', marginBottom: 14, color: '#1b1c19' },
+  renameInput: { backgroundColor: '#f5f3ee', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#1b1c19', marginBottom: 18 },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  modalCancelBtn: { paddingVertical: 8, paddingHorizontal: 12 },
+  modalCancelText: { color: '#787681', fontSize: 14, fontWeight: '600' },
+  modalConfirmBtn: { backgroundColor: '#585594', paddingVertical: 8, paddingHorizontal: 18, borderRadius: 10 },
+  modalConfirmText: { color: '#FFF', fontWeight: '600', fontSize: 14 },
+
+  // Highlights Modal styles — centered card + dark overlay, locks screen
+  highlightsOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(27,28,25,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  highlightsFullContent: {
+    width: '88%',
+    maxHeight: '70%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 22,
     elevation: 5,
   },
-  modalHeader: { fontSize: 20, fontWeight: 'bold', marginBottom: 15, color: '#000' },
-  renameInput: {
-    borderBottomWidth: 1,
-    borderColor: '#000',
-    fontSize: 18,
-    paddingVertical: 10,
+  highlightsModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 20,
-    color: '#000'
+    paddingBottom: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#e3dfff',
   },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end' },
-  modalCancelBtn: { padding: 10, marginRight: 15 },
-  modalCancelText: { color: '#666', fontSize: 16 },
-  modalConfirmBtn: { backgroundColor: '#000', paddingVertical: 8, paddingHorizontal: 20, borderRadius: 8 },
-  modalConfirmText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  highlightsTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  highlightsModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1b1c19',
+  },
+  highlightsLoadingArea: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  highlightsLoadingText: {
+    fontSize: 14,
+    color: '#787681',
+    fontStyle: 'italic',
+  },
+  highlightsScrollArea: {
+    maxHeight: 400,
+  },
+  highlightsContentText: {
+    fontSize: 15,
+    color: '#3a3850',
+    lineHeight: 24,
+  },
 });
