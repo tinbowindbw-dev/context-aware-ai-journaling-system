@@ -73,7 +73,7 @@ def generate_title_from_image(base64_image: str) -> tuple[str, str]:
     client = OpenAI(
         api_key=QWEN_API_KEY,
         base_url=QWEN_ENDPOINT,
-        timeout=90.0,
+        timeout=600.0,
     )
 
     messages = [
