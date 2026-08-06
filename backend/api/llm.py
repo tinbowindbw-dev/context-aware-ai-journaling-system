@@ -12,7 +12,7 @@ DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 MODEL = "deepseek-chat"
 
 QWEN_API_KEY = os.getenv("QWEN_API_KEY")
-QWEN_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+QWEN_ENDPOINT = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 
 
 def get_common_headers():
@@ -72,7 +72,7 @@ def generate_title_from_image(base64_image: str) -> tuple[str, str]:
 
     client = OpenAI(
         api_key=QWEN_API_KEY,
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        base_url=QWEN_ENDPOINT,
         timeout=90.0,
     )
 
