@@ -12,7 +12,7 @@ DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 MODEL = "deepseek-chat"
 
 QWEN_API_KEY = os.getenv("QWEN_API_KEY")
-QWEN_ENDPOINT = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+QWEN_ENDPOINT = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
 
 
 def get_common_headers():
