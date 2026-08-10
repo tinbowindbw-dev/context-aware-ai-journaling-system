@@ -1,1 +1,1 @@
-export const API_URL = 'https://vercel.com/brennan-jones-projects-8b223afe/context-aware-ai-journaling-system/825AC4WLZmRNiFQc8LfsNW7CvyCe';
+export const API_URL = 'https://context-aware-ai-jou-git-73c273-brennan-jones-projects-8b223afe.vercel.app/';
