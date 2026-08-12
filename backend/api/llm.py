@@ -12,7 +12,7 @@ DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 MODEL = "deepseek-chat"
 
 QWEN_API_KEY = os.getenv("QWEN_API_KEY")
-QWEN_ENDPOINT = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
+QWEN_ENDPOINT = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 
 
 def get_common_headers():
@@ -81,12 +81,12 @@ def generate_title_from_image(base64_image: str) -> tuple[str, str]:
             "role": "user",
             "content": [
                 {
-                    "type": "image_url",
-                    "image_url": {"url": image_url}
-                },
-                {
                     "type": "text",
                     "text": "What event is happening in this photo? Summarize it as a short English event title (max 5 words, e.g., 'Having coffee', 'Working at office', 'Walking in the park', 'Cooking dinner'). Also, provide a detailed description of the photo to be used as context for a diary entry. Do not use Chinese characters. Output format MUST BE JSON: {\"title\": \"<short title>\", \"description\": \"<detailed description>\"}"
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {"url": image_url}
                 }
             ]
         }
@@ -97,7 +97,8 @@ def generate_title_from_image(base64_image: str) -> tuple[str, str]:
             # qwen-vl-max is the latest Vision-Language model for image analysis
             model="qwen-vl-max",
             messages=messages,
-            temperature=0.4
+            max_tokens=1000
+            # temperature=0.4
         )
     except Exception as e:
         print(f"[Qwen Vision Error] API call failed: {e}")
