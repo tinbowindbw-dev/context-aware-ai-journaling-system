@@ -118,7 +118,8 @@ export default function StoryLayer() {
       style={styles.container}
     >
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>STORY</Text>
+        <Text style={styles.greetingText}>Story</Text>
+        <Text style={styles.headerTitle}>Today's Narrative</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -165,7 +166,7 @@ export default function StoryLayer() {
                   onPress={() => setShowStylePicker(true)}
                   disabled={isGeneratingStory}
                 >
-                  <Ionicons name="refresh-outline" size={18} color="#000" />
+                  <Ionicons name="refresh-outline" size={18} color="#585594" />
                   <Text style={styles.outlineBtnText}>REGENERATE</Text>
                 </TouchableOpacity>
 
@@ -219,33 +220,35 @@ export default function StoryLayer() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#E9EEF0' },
-  header: { paddingTop: 60, paddingBottom: 20, alignItems: 'center' },
-  headerTitle: { fontSize: 24, fontWeight: '900', letterSpacing: 2, color: '#000' },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 60 },
+  container: { flex: 1, backgroundColor: '#fbf9f4' },
+  header: { paddingTop: 56, paddingBottom: 16, paddingHorizontal: 22 },
+  greetingText: { fontSize: 15, color: '#787681', fontWeight: '500' },
+  headerTitle: { fontSize: 28, fontWeight: '700', color: '#1b1c19', marginTop: 2 },
+  scrollContent: { paddingHorizontal: 18, paddingBottom: 100 },
 
   draftCard: {
     backgroundColor: '#fff',
     borderRadius: 24,
-    padding: 24,
-    marginBottom: 30,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 5
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#585594',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 3
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   dateText: { fontSize: 13, fontWeight: '700', color: '#B0B0B0', textTransform: 'uppercase' },
-  draftBadge: { backgroundColor: '#FFEE00', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  draftBadgeText: { fontSize: 10, fontWeight: '900', color: '#000' },
+  draftBadge: { backgroundColor: '#e3dfff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  draftBadgeText: { fontSize: 11, fontWeight: '700', color: '#423f7d' },
   moodText: { fontSize: 11, fontWeight: '800', marginTop: 2 },
 
   storyInput: {
-    fontSize: 17,
+    fontSize: 16,
     lineHeight: 26,
-    color: '#1a1a1a',
-    backgroundColor: '#F9FAFB',
-    padding: 15,
+    color: '#1b1c19',
+    backgroundColor: '#f5f3ee',
+    padding: 16,
     borderRadius: 16,
     minHeight: 150,
     textAlignVertical: 'top'
@@ -253,69 +256,77 @@ const styles = StyleSheet.create({
 
   styleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 20 },
   styleChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#E0E0E0'
+    borderColor: '#e4e2dd'
   },
-  styleChipActive: { backgroundColor: '#000', borderColor: '#000' },
-  styleChipText: { fontSize: 12, fontWeight: '600', color: '#666' },
+  styleChipActive: { backgroundColor: '#585594', borderColor: '#585594' },
+  styleChipText: { fontSize: 12, fontWeight: '600', color: '#787681' },
   styleChipTextActive: { color: '#fff' },
 
-  actionRow: { flexDirection: 'row', gap: 12, marginTop: 25 },
+  actionRow: { flexDirection: 'row', gap: 10, marginTop: 18 },
   outlineBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#000'
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e3dfff',
+    backgroundColor: '#fff'
   },
-  outlineBtnText: { color: '#000', fontWeight: '800', marginLeft: 8, fontSize: 13 },
+  outlineBtnText: { color: '#585594', fontWeight: '700', marginLeft: 8, fontSize: 13, letterSpacing: 0.3 },
   solidBtn: {
-    flex: 2,
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: '#000'
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: '#585594',
+    shadowColor: '#585594',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 4
   },
-  solidBtnText: { color: '#fff', fontWeight: '800', marginLeft: 8, fontSize: 13, letterSpacing: 1 },
+  solidBtnText: { color: '#fff', fontWeight: '700', marginLeft: 8, fontSize: 13, letterSpacing: 0.3 },
 
-  moodSelectorRow: { flexDirection: 'row', gap: 6, marginBottom: 15 },
+  moodSelectorRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   moodChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    backgroundColor: '#fff'
+    borderColor: '#e4e2dd',
+    backgroundColor: '#fbf9f4'
   },
-  moodChipText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  moodChipText: { fontSize: 11, fontWeight: '600', color: '#787681' },
 
-  pickerSection: { marginTop: 20, backgroundColor: '#F9FAFB', padding: 15, borderRadius: 16 },
-  pickerLabel: { fontSize: 12, fontWeight: '700', color: '#666', marginBottom: 10 },
-  pickerActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 15, marginTop: 15 },
-  confirmBtn: { backgroundColor: '#000', paddingHorizontal: 20, paddingVertical: 8, borderRadius: 8 },
-  confirmText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  cancelBtn: { paddingVertical: 8 },
-  cancelText: { color: '#666', fontWeight: '600', fontSize: 14 },
+  pickerSection: { marginTop: 18, backgroundColor: '#f5f3ee', padding: 16, borderRadius: 18 },
+  pickerLabel: { fontSize: 13, fontWeight: '600', color: '#474650', marginBottom: 10 },
+  pickerActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 },
+  confirmBtn: { backgroundColor: '#585594', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 12 },
+  confirmText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  cancelBtn: { paddingVertical: 8, paddingHorizontal: 12 },
+  cancelText: { color: '#787681', fontWeight: '600', fontSize: 13 },
 
   noDraftCard: {
     alignItems: 'center',
     padding: 40,
-    backgroundColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: '#fff',
     borderRadius: 24,
-    borderWidth: 2,
-    borderColor: '#fff',
-    borderStyle: 'dashed'
+    shadowColor: '#585594',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 3
   },
-  noDraftText: { marginTop: 15, color: '#999', textAlign: 'center', lineHeight: 22 },
+  noDraftText: { marginTop: 15, color: '#787681', textAlign: 'center', lineHeight: 22 },
 
   historySection: { marginTop: 20 },
   sectionTitle: { fontSize: 14, fontWeight: '900', color: '#666', letterSpacing: 1, marginBottom: 15 },

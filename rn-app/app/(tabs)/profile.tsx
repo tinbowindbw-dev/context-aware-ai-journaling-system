@@ -137,7 +137,8 @@ export default function ProfileLayer() {
         >
             <View style={styles.header}>
                 <TouchableOpacity onLongPress={handleDeveloperTools} delayLongPress={900} activeOpacity={1}>
-                    <Text style={styles.headerTitle}>PROFILE</Text>
+                    <Text style={styles.greetingText}>Profile</Text>
+                    <Text style={styles.headerTitle}>Settings</Text>
                 </TouchableOpacity>
             </View>
 
@@ -178,7 +179,7 @@ export default function ProfileLayer() {
                                     onBlur={handleSaveName}
                                 />
                                 <TouchableOpacity onPress={handleSaveName} style={styles.saveBtn}>
-                                    <Ionicons name="checkmark" size={20} color="#000" />
+                                    <Ionicons name="checkmark" size={20} color="#585594" />
                                 </TouchableOpacity>
                             </View>
                         ) : (
@@ -195,7 +196,7 @@ export default function ProfileLayer() {
                 </View>
 
                 {/* System Toggles */}
-                <Text style={styles.sectionTitle}>System Toggles</Text>
+                <Text style={styles.sectionTitle}>Preferences</Text>
                 <View style={styles.card}>
                     <View style={styles.row}>
                         <View style={styles.rowTextColumn}>
@@ -205,7 +206,7 @@ export default function ProfileLayer() {
                         <Switch
                             value={isTrackingEnabled}
                             onValueChange={handleToggleTracking}
-                            trackColor={{ false: '#ccc', true: '#000' }}
+                            trackColor={{ false: '#c8c5d1', true: '#585594' }}
                             thumbColor={'#fff'}
                         />
                     </View>
@@ -223,35 +224,39 @@ export default function ProfileLayer() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#E9EEF0' },
-    header: { paddingTop: 60, paddingBottom: 20, alignItems: 'center' },
-    headerTitle: { fontSize: 24, fontWeight: '900', letterSpacing: 2, color: '#000' },
-    scrollContent: { paddingHorizontal: 25, paddingBottom: 60 },
+    container: { flex: 1, backgroundColor: '#fbf9f4' },
+    header: { paddingTop: 56, paddingBottom: 16, paddingHorizontal: 22 },
+    greetingText: { fontSize: 15, color: '#787681', fontWeight: '500' },
+    headerTitle: { fontSize: 28, fontWeight: '700', color: '#1b1c19', marginTop: 2 },
+    scrollContent: { paddingHorizontal: 18, paddingBottom: 100 },
 
     userCard: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#fff',
         padding: 20,
-        borderRadius: 15,
-        borderWidth: 1,
-        borderColor: '#ccc',
-        marginBottom: 30,
+        borderRadius: 24,
+        marginBottom: 24,
+        shadowColor: '#585594',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 16,
+        elevation: 3,
     },
     avatarContainer: {
         position: 'relative',
-        marginRight: 15,
+        marginRight: 16,
     },
     avatarImage: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+        width: 64,
+        height: 64,
+        borderRadius: 32,
     },
     avatarPlaceholder: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: '#f0f0f0',
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#f5f3ee',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -259,10 +264,10 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: -2,
         right: -2,
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        backgroundColor: '#000',
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#585594',
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 2,
@@ -273,7 +278,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
-    userName: { fontSize: 20, fontWeight: 'bold', color: '#000' },
+    userName: { fontSize: 20, fontWeight: '700', color: '#1b1c19' },
     editIcon: { marginLeft: 6 },
     nameEditRow: {
         flexDirection: 'row',
@@ -282,10 +287,10 @@ const styles = StyleSheet.create({
     nameInput: {
         flex: 1,
         fontSize: 20,
-        fontWeight: 'bold',
-        color: '#000',
+        fontWeight: '700',
+        color: '#1b1c19',
         borderBottomWidth: 1.5,
-        borderBottomColor: '#000',
+        borderBottomColor: '#585594',
         paddingVertical: 2,
         paddingHorizontal: 0,
     },
@@ -297,19 +302,21 @@ const styles = StyleSheet.create({
 
     sectionTitle: {
         fontSize: 14,
-        fontWeight: 'bold',
-        color: '#666',
-        marginBottom: 10,
-        textTransform: 'uppercase',
-        letterSpacing: 1
+        fontWeight: '700',
+        color: '#474650',
+        marginBottom: 12,
+        paddingLeft: 2,
     },
     card: {
         backgroundColor: '#fff',
-        borderRadius: 15,
+        borderRadius: 24,
         padding: 20,
-        borderWidth: 1,
-        borderColor: '#ccc',
-        marginBottom: 30,
+        marginBottom: 24,
+        shadowColor: '#585594',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 16,
+        elevation: 3,
     },
     row: {
         flexDirection: 'row',
@@ -317,8 +324,8 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
     },
     rowTextColumn: { flex: 1, paddingRight: 10 },
-    rowTitle: { fontSize: 16, fontWeight: '600', color: '#000' },
-    rowSub: { fontSize: 13, color: '#888', marginTop: 4 },
+    rowTitle: { fontSize: 16, fontWeight: '600', color: '#1b1c19' },
+    rowSub: { fontSize: 13, color: '#787681', marginTop: 4 },
 
     statusIndicator: {
         flexDirection: 'row',
@@ -326,7 +333,7 @@ const styles = StyleSheet.create({
         marginTop: 14,
         paddingTop: 14,
         borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
+        borderTopColor: '#f0eee9',
     },
     statusDot: {
         width: 8,
@@ -338,10 +345,10 @@ const styles = StyleSheet.create({
         backgroundColor: '#34C759',
     },
     statusInactive: {
-        backgroundColor: '#ccc',
+        backgroundColor: '#c8c5d1',
     },
     statusText: {
         fontSize: 12,
-        color: '#888',
+        color: '#787681',
     },
 });
