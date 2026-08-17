@@ -9,6 +9,7 @@ export interface EventItem {
     title: string;
     isManual: boolean;
     isPhoto?: boolean;
+    photoUri?: string; // 持久化的照片文件路径（文档目录）
     additional_info?: string;
     location?: string;
     weather?: string;

@@ -1,12 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -20,20 +22,18 @@ export default function InterpretationLayer() {
   const {
     clips,
     events,
-    updateClip,
-    deleteClip,
     isGeneratingStory,
     setGeneratingStory,
     setStoryDraft,
   } = useStore();
-  const sortedClips = [...clips].sort((a, b) => b.createdAt - a.createdAt);
 
   const [isRefreshingClips, setIsRefreshingClips] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<typeof events[number] | null>(null);
 
-  const formatClipTime = (timestamp: number) => {
-    const d = new Date(timestamp);
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-  };
+  // 只取带照片的事件，最新的在前
+  const photoEvents = events
+    .filter((e) => e.isPhoto && e.photoUri)
+    .sort((a, b) => b.timestamp - a.timestamp);
 
   const handleManualRefreshClips = async () => {
     setIsRefreshingClips(true);
@@ -46,21 +46,6 @@ export default function InterpretationLayer() {
     } finally {
       setIsRefreshingClips(false);
     }
-  };
-
-  const confirmDelete = (id: string) => {
-    Alert.alert(
-      'Delete Clip',
-      'Are you sure you want to delete this memory clip?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => deleteClip(id),
-        },
-      ]
-    );
   };
 
   const handleGenerateStory = async () => {
@@ -130,20 +115,20 @@ export default function InterpretationLayer() {
       <View style={styles.header}>
         <Text style={styles.greetingText}>Interpretation</Text>
         <View style={styles.headerTitleRow}>
-          <Ionicons name="sparkles" size={20} color="#585594" />
-          <Text style={styles.headerTitle}>AI Reflective Clips</Text>
+          <Ionicons name="images-outline" size={20} color="#585594" />
+          <Text style={styles.headerTitle}>Photo Memories</Text>
         </View>
       </View>
 
-      {/* Timeline */}
-      {sortedClips.length === 0 ? (
+      {/* Photo Events List */}
+      {photoEvents.length === 0 ? (
         <View style={styles.emptyArea}>
           <View style={styles.emptyIconCircle}>
-            <Ionicons name="hourglass-outline" size={32} color="#b0adb8" />
+            <Ionicons name="images-outline" size={32} color="#b0adb8" />
           </View>
-          <Text style={styles.emptyTitle}>No Clips Yet</Text>
+          <Text style={styles.emptyTitle}>No Photos Yet</Text>
           <Text style={styles.emptyText}>
-            AI evaluates your events every hour to weave them into reflective clips.
+            Take a photo from the Event page to see it here with a detailed reflection.
           </Text>
         </View>
       ) : (
@@ -151,47 +136,30 @@ export default function InterpretationLayer() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {sortedClips.map((clip) => (
-            <View key={clip.id} style={styles.timelineCard}>
-              {/* Top Row: Time + Meta + More */}
-              <View style={styles.timelineTopRow}>
-                <View style={styles.timelineLeftGroup}>
-                  <Text style={styles.timelineTime}>
-                    {formatClipTime(clip.createdAt)}
-                  </Text>
-                  <View style={styles.timelineMetaCol}>
-                    <Text style={styles.timelineSlot} numberOfLines={1}>
-                      {clip.title || clip.slotId}
-                    </Text>
-                    <View style={styles.aiSparkRow}>
-                      <Ionicons name="sparkles" size={10} color="#706eaf" />
-                      <Text style={styles.aiSparkLabel}>AI Clip</Text>
-                    </View>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={() => confirmDelete(clip.id)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name="ellipsis-horizontal" size={18} color="#c8c5d1" />
-                </TouchableOpacity>
-              </View>
+          {photoEvents.map((event) => (
+            <TouchableOpacity
+              key={event.id}
+              style={styles.eventCard}
+              onPress={() => setSelectedEvent(event)}
+              activeOpacity={0.85}
+            >
+              {/* 缩略图 */}
+              <Image source={{ uri: event.photoUri }} style={styles.eventThumb} contentFit="cover" />
 
-              {/* Bottom Row: Icon + Content */}
-              <View style={styles.timelineBodyRow}>
-                <View style={styles.timelineIconCircle}>
-                  <Ionicons name="text-outline" size={16} color="#585594" />
+              {/* 简短文字：时间 / 地点 / 标题 */}
+              <View style={styles.eventInfoCol}>
+                <View style={styles.eventTimeRow}>
+                  <Text style={styles.eventTime}>{event.time}</Text>
+                  {event.location ? (
+                    <Text style={styles.eventLocation} numberOfLines={1}>{event.location}</Text>
+                  ) : null}
                 </View>
-                <TextInput
-                  style={styles.timelineContent}
-                  multiline
-                  value={clip.text}
-                  onChangeText={(newText) => updateClip(clip.id, newText)}
-                  scrollEnabled={false}
-                  placeholderTextColor="#b0adb8"
-                />
+                <Text style={styles.eventTitle} numberOfLines={2}>{event.title}</Text>
+                <View style={styles.eventArrowRow}>
+                  <Ionicons name="chevron-forward" size={14} color="#b0adb8" />
+                </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
       )}
@@ -230,6 +198,54 @@ export default function InterpretationLayer() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Photo Detail Modal */}
+      <Modal
+        visible={!!selectedEvent}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedEvent(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setSelectedEvent(null)}
+          />
+          <View style={styles.modalCard}>
+            {/* 上方：拍摄的图片 */}
+            {selectedEvent?.photoUri ? (
+              <Image
+                source={{ uri: selectedEvent.photoUri }}
+                style={styles.modalImage}
+                contentFit="cover"
+              />
+            ) : null}
+            {/* 下方：详细介绍文字 */}
+            <View style={styles.modalBody}>
+              <View style={styles.modalTitleRow}>
+                <Text style={styles.modalTime}>{selectedEvent?.time}</Text>
+                {selectedEvent?.location ? (
+                  <Text style={styles.modalLocation} numberOfLines={1}>
+                    {selectedEvent.location}
+                  </Text>
+                ) : null}
+              </View>
+              <Text style={styles.modalTitle}>{selectedEvent?.title}</Text>
+              {selectedEvent?.additional_info ? (
+                <Text style={styles.modalDetail}>{selectedEvent.additional_info}</Text>
+              ) : null}
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setSelectedEvent(null)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.modalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -252,22 +268,38 @@ const styles = StyleSheet.create({
   // Scroll
   scrollContent: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 140 },
 
-  // Timeline Card
-  timelineCard: {
-    backgroundColor: '#fff', borderRadius: 24, padding: 16, marginBottom: 12,
+  // Event Card（缩略图 + 简短文字）
+  eventCard: {
+    flexDirection: 'row', gap: 14, alignItems: 'center',
+    backgroundColor: '#fff', borderRadius: 24, padding: 14, marginBottom: 12,
     shadowColor: '#585594', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06, shadowRadius: 16, elevation: 3,
   },
-  timelineTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  timelineLeftGroup: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
-  timelineTime: { fontSize: 32, fontWeight: '700', color: '#585594' },
-  timelineMetaCol: { flexDirection: 'column', flex: 1 },
-  timelineSlot: { fontSize: 14, fontWeight: '700', color: '#474650', opacity: 0.7 },
-  aiSparkRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  aiSparkLabel: { fontSize: 11, color: '#706eaf', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  timelineBodyRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 10 },
-  timelineIconCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#e3dfff', justifyContent: 'center', alignItems: 'center', marginTop: 2 },
-  timelineContent: { flex: 1, fontSize: 15, color: '#1b1c19', lineHeight: 22, fontStyle: 'italic', padding: 10, backgroundColor: '#f5f3ee', borderRadius: 14, minHeight: 60, textAlignVertical: 'top' },
+  eventThumb: { width: 84, height: 84, borderRadius: 18, backgroundColor: '#f5f3ee' },
+  eventInfoCol: { flex: 1, justifyContent: 'center' },
+  eventTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  eventTime: { fontSize: 18, fontWeight: '700', color: '#585594' },
+  eventLocation: { flex: 1, fontSize: 12, fontWeight: '600', color: '#787681', textAlign: 'right' },
+  eventTitle: { fontSize: 16, fontWeight: '700', color: '#1b1c19', marginTop: 4 },
+  eventArrowRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6 },
+
+  // Photo Detail Modal（半透明黑遮罩 + 大卡片）
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+  modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(27,28,25,0.6)' },
+  modalCard: {
+    width: '100%', maxHeight: '80%', backgroundColor: '#fff', borderRadius: 24,
+    overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25, shadowRadius: 20, elevation: 10,
+  },
+  modalImage: { width: '100%', height: 220, backgroundColor: '#f5f3ee' },
+  modalBody: { padding: 20 },
+  modalTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  modalTime: { fontSize: 18, fontWeight: '700', color: '#585594' },
+  modalLocation: { flex: 1, fontSize: 13, fontWeight: '600', color: '#787681', textAlign: 'right' },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#1b1c19', marginTop: 6 },
+  modalDetail: { fontSize: 14, color: '#474650', lineHeight: 22, marginTop: 8, fontStyle: 'italic' },
+  modalCloseBtn: { alignSelf: 'center', marginTop: 18, backgroundColor: '#585594', paddingVertical: 10, paddingHorizontal: 28, borderRadius: 20 },
+  modalCloseText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 
   // Floating Buttons
   floatingActions: { position: 'absolute', bottom: 100, left: 18, right: 18, flexDirection: 'row', gap: 10 },

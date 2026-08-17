@@ -4,6 +4,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
@@ -190,6 +191,20 @@ export default function EventLayer() {
       const base64 = asset.base64;
       const exif = asset.exif;
 
+      // 持久化照片到文档目录（App 重启后仍可查看）
+      let photoUri: string | undefined;
+      try {
+        const ext = (asset.fileName && asset.fileName.split('.').pop()) || 'jpg';
+        const dir = `${FileSystem.documentDirectory}photos/`;
+        await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+        const dest = `${dir}${Date.now()}.${ext}`;
+        await FileSystem.copyAsync({ from: asset.uri, to: dest });
+        photoUri = dest;
+      } catch (saveErr) {
+        console.error('Failed to save photo locally:', saveErr);
+        photoUri = asset.uri; // 兜底：持久化失败时仍存临时 uri
+      }
+
       const now = new Date();
       let eventTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
       let eventTimestamp = now.getTime();
@@ -261,6 +276,7 @@ export default function EventLayer() {
           temperature: data.temperature || undefined,
           isManual: true,
           isPhoto: true,
+          photoUri,
           additional_info: data.description || '',
           timestamp: eventTimestamp,
         });
@@ -275,6 +291,7 @@ export default function EventLayer() {
           title: "Photo Event",
           isManual: true,
           isPhoto: true,
+          photoUri,
           timestamp: eventTimestamp,
         });
       }
