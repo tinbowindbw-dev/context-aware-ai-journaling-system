@@ -1,6 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { GlassTabBar } from '../../components/TabBar';
 import * as BackgroundFetch from 'expo-background-fetch';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
 import { Tabs } from 'expo-router';
 import * as TaskManager from 'expo-task-manager';
@@ -16,6 +17,35 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // 1. Define the background task name
 const BACKGROUND_LOCATION_TASK = 'background-location-task';
+
+const generateAndSaveStoryIllustration = async (storyId: string, storyText: string, mood?: string) => {
+  try {
+    const createResponse = await fetch(`${API_URL}/generate_story_image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ story_text: storyText, mood, user_id: useStore.getState().userName }),
+    });
+    const createData = await createResponse.json();
+    if (!createResponse.ok || !createData.success || !createData.task_id) return;
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const statusResponse = await fetch(`${API_URL}/story_image_task/${createData.task_id}`);
+      const statusData = await statusResponse.json();
+      if (statusData.status === 'FAILED') return;
+      if (statusData.status === 'SUCCEEDED' && statusData.image_url) {
+        const directory = `${FileSystem.documentDirectory}illustrations/`;
+        await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+        const localUri = `${directory}${storyId}.png`;
+        await FileSystem.downloadAsync(statusData.image_url, localUri);
+        useStore.getState().updateStoryIllustration(storyId, localUri);
+        return;
+      }
+    }
+  } catch (error) {
+    console.error('[Midnight Auto] Illustration failed:', error);
+  }
+};
 
 import { useStore } from '../../store/useStore';
 
@@ -397,8 +427,10 @@ const checkAndGenerateMidnightStory = async () => {
         text: data.story_text,
         date: yesterday,
         style: "Classic",
+        mood: data.mood ?? undefined,
         createdAt: Date.now()
       });
+      await generateAndSaveStoryIllustration(`auto-${yesterday}`, data.story_text, data.mood);
       console.log(`[Midnight Auto] Successfully saved story for ${yesterday}`);
     }
   } catch (err) {

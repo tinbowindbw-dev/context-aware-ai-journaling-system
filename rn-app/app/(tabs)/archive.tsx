@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import {
-    StyleSheet, Text, View, ScrollView, TouchableOpacity,
+    ActivityIndicator, Image, StyleSheet, Text, View, ScrollView, TouchableOpacity,
     Dimensions, Alert, TextInput, Modal, SafeAreaView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
+import { API_URL } from '../../constants/Config';
 import { useStore } from '../../store/useStore';
 import type { MoodType, StoryItem } from '../../store/useStore';
 import { getLocalDateString } from '../../utils/date';
@@ -35,12 +37,72 @@ const getTextColorForMood = (mood: MoodType): string => {
 };
 
 export default function ArchiveLayer() {
-    const { stories } = useStore();
+    const { stories, updateStoryIllustration } = useStore();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedDayStories, setSelectedDayStories] = useState<StoryItem[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedDateStr, setSelectedDateStr] = useState('');
+    const [isGeneratingIllustration, setIsGeneratingIllustration] = useState(false);
+
+    const selectedStory = selectedDayStories[0];
+
+    const waitForIllustration = async (taskId: string): Promise<string> => {
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            const response = await fetch(`${API_URL}/story_image_task/${taskId}`);
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.detail || 'Failed to check illustration status.');
+            }
+            if (data.status === 'SUCCEEDED' && data.image_url) return data.image_url;
+            if (data.status === 'FAILED') {
+                throw new Error(data.message || 'Illustration generation failed.');
+            }
+        }
+        throw new Error('Illustration generation timed out.');
+    };
+
+    const saveIllustrationLocally = async (remoteUri: string, storyId: string): Promise<string> => {
+        const directory = `${FileSystem.documentDirectory}illustrations/`;
+        await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+        const localUri = `${directory}${storyId}.png`;
+        await FileSystem.downloadAsync(remoteUri, localUri);
+        return localUri;
+    };
+
+    const handleGenerateIllustration = async () => {
+        if (!selectedStory) return;
+        setIsGeneratingIllustration(true);
+        try {
+            const response = await fetch(`${API_URL}/generate_story_image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    story_text: selectedDayStories.map((story) => story.text).join('\n\n'),
+                    mood: selectedDayStories.find((story) => story.mood)?.mood,
+                    user_id: useStore.getState().userName,
+                }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success || !data.task_id) {
+                throw new Error(data.detail || 'Unable to start illustration generation.');
+            }
+
+            const remoteUri = await waitForIllustration(data.task_id);
+            const localUri = await saveIllustrationLocally(remoteUri, selectedStory.id);
+            updateStoryIllustration(selectedStory.id, localUri);
+            setSelectedDayStories((current) => current.map((story) => (
+                story.id === selectedStory.id ? { ...story, illustrationUri: localUri } : story
+            )));
+            Alert.alert('Illustration Ready', 'The illustration has been saved to this journal entry.');
+        } catch (error) {
+            console.error('Story illustration error:', error);
+            Alert.alert('Generation Failed', error instanceof Error ? error.message : 'Unable to generate illustration.');
+        } finally {
+            setIsGeneratingIllustration(false);
+        }
+    };
 
     // Calendar Logic
     const year = currentDate.getFullYear();
@@ -303,6 +365,30 @@ export default function ArchiveLayer() {
                             </TouchableOpacity>
                         </View>
 
+                        {selectedStory?.illustrationUri ? (
+                            <Image
+                                source={{ uri: selectedStory.illustrationUri }}
+                                style={styles.storyIllustration}
+                                resizeMode="cover"
+                            />
+                        ) : null}
+
+                        <TouchableOpacity
+                            style={[styles.generateImageBtn, isGeneratingIllustration && styles.disabledButton]}
+                            onPress={handleGenerateIllustration}
+                            disabled={isGeneratingIllustration}
+                            activeOpacity={0.85}
+                        >
+                            {isGeneratingIllustration ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                                <Ionicons name="color-wand-outline" size={17} color="#fff" />
+                            )}
+                            <Text style={styles.generateImageBtnText}>
+                                {isGeneratingIllustration ? 'Creating Illustration...' : selectedStory?.illustrationUri ? 'Regenerate Illustration' : 'Create Day Illustration'}
+                            </Text>
+                        </TouchableOpacity>
+
                         <ScrollView
                             contentContainerStyle={styles.modalScroll}
                             showsVerticalScrollIndicator={false}
@@ -518,4 +604,30 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     modalStoryText: { fontSize: 15, color: '#474650', lineHeight: 24, fontStyle: 'italic' },
+    storyIllustration: {
+        width: '88%',
+        height: 190,
+        borderRadius: 20,
+        alignSelf: 'center',
+        marginBottom: 12,
+        backgroundColor: '#f5f3ee',
+    },
+    generateImageBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        alignSelf: 'center',
+        backgroundColor: '#585594',
+        paddingVertical: 11,
+        paddingHorizontal: 18,
+        borderRadius: 24,
+        marginBottom: 14,
+        shadowColor: '#585594',
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+        elevation: 5,
+    },
+    generateImageBtnText: { color: '#fff', fontSize: 13, fontWeight: '700', marginLeft: 8 },
+    disabledButton: { opacity: 0.6 },
 });

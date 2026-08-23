@@ -42,6 +42,7 @@ export interface StoryItem {
     date: string; // e.g., "2026-02-01"
     style: string;
     mood?: MoodType; // Emotional tone: positive, calm, stressed, negative
+    illustrationUri?: string;
     createdAt: number;
 }
 
@@ -94,6 +95,7 @@ interface StoreState {
     setStoryDraft: (draft: { text: string; style: string; date: string; mood?: MoodType } | null) => void;
     updateStoryDraftText: (text: string) => void;
     addStory: (story: StoryItem) => void;
+    updateStoryIllustration: (id: string, illustrationUri: string) => void;
     deleteStory: (id: string) => void;
     setGeneratingStory: (val: boolean) => void;
     // User Profile Actions
@@ -238,6 +240,11 @@ export const useStore = create<StoreState>()(
                     currentStoryDraft: null // Clear draft on save
                 }));
             },
+            updateStoryIllustration: (id, illustrationUri) => set((state) => ({
+                stories: state.stories.map((story) => (
+                    story.id === id ? { ...story, illustrationUri } : story
+                ))
+            })),
             deleteStory: (id) => set((state) => ({
                 stories: state.stories.filter((s) => s.id !== id)
             })),

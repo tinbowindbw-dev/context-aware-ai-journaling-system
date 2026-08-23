@@ -15,6 +15,8 @@ try:
         generate_story_from_clips,
         generate_title_from_image,
         generate_title_from_video,
+        create_story_illustration_task,
+        get_story_illustration_task,
         decide_mood_prompt_timing
     )
     from .amap import reverse_geocode_amap, get_weather_amap
@@ -27,6 +29,8 @@ except ImportError:
         generate_story_from_clips,
         generate_title_from_image,
         generate_title_from_video,
+        create_story_illustration_task,
+        get_story_illustration_task,
         decide_mood_prompt_timing
     )
     from amap import reverse_geocode_amap, get_weather_amap
@@ -47,9 +51,36 @@ class EventEntry(BaseModel):
     additional_info: Optional[str] = None
     user_id: Optional[str] = "Unknown"
 
+
+class StoryIllustrationRequest(BaseModel):
+    story_text: str
+    mood: Optional[str] = None
+    user_id: Optional[str] = "Unknown"
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/generate_story_image")
+async def generate_story_image(data: StoryIllustrationRequest):
+    """Start an asynchronous diary illustration task."""
+    try:
+        task_id = create_story_illustration_task(data.story_text, data.mood)
+        return {"success": True, "task_id": task_id, "status": "PENDING"}
+    except Exception as e:
+        print(f"[{data.user_id}] Story illustration task error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/story_image_task/{task_id}")
+async def story_image_task(task_id: str):
+    """Get the status and image URL of an illustration task."""
+    try:
+        return {"success": True, **get_story_illustration_task(task_id)}
+    except Exception as e:
+        print(f"Story illustration status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 class CurrentContextRequest(BaseModel):
     latitude: float

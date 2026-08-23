@@ -13,6 +13,7 @@ MODEL = "deepseek-chat"
 
 QWEN_API_KEY = os.getenv("QWEN_API_KEY")
 QWEN_ENDPOINT = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1" #
+QWEN_IMAGE_TASK_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-to-image/image-synthesis"
 
 
 def get_common_headers():
@@ -20,6 +21,61 @@ def get_common_headers():
     return {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
         "Content-Type": "application/json"
+    }
+
+
+def create_story_illustration_task(story_text: str, mood: str = None) -> str:
+    """Create an asynchronous Qwen image task and return its task id."""
+    if not QWEN_API_KEY:
+        raise RuntimeError("QWEN_API_KEY is not configured on the server.")
+    if not story_text.strip():
+        raise ValueError("Story text cannot be empty.")
+
+    mood_text = f"The emotional tone is {mood}." if mood else ""
+    prompt = (
+        "Create a calm, refined editorial illustration for a personal diary entry. "
+        "Express the atmosphere and emotional tone without identifiable faces, names, "
+        "private addresses, readable text, logos, or watermarks. Use a soft lavender, "
+        "warm cream, and muted mint palette. Keep it minimal, contemplative, and suitable "
+        f"for a journaling app. {mood_text}\nDiary entry:\n{story_text[:2000]}"
+    )
+    response = requests.post(
+        QWEN_IMAGE_TASK_ENDPOINT,
+        headers={
+            "Authorization": f"Bearer {QWEN_API_KEY}",
+            "Content-Type": "application/json",
+            "X-DashScope-Async": "enable",
+        },
+        json={
+            "model": "wanx-v1",
+            "input": {"prompt": prompt},
+            "parameters": {"size": "1024*1024", "n": 1},
+        },
+        timeout=60,
+    )
+    response.raise_for_status()
+    task_id = response.json().get("output", {}).get("task_id")
+    if not task_id:
+        raise RuntimeError(f"Image task id missing: {response.text[:300]}")
+    return task_id
+
+
+def get_story_illustration_task(task_id: str) -> dict:
+    """Return normalized status for an asynchronous Qwen image task."""
+    response = requests.get(
+        f"https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}",
+        headers={"Authorization": f"Bearer {QWEN_API_KEY}"},
+        timeout=30,
+    )
+    response.raise_for_status()
+    output = response.json().get("output", {})
+    status = output.get("task_status", "UNKNOWN")
+    result = output.get("results", []) or []
+    image_url = result[0].get("url") if result else None
+    return {
+        "status": status,
+        "image_url": image_url,
+        "message": output.get("message"),
     }
 
 
