@@ -6,6 +6,7 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   index: 'sensors',
@@ -24,6 +25,7 @@ const LABELS: Record<string, string> = {
 };
 
 export function GlassTabBar({ state, navigation }: any) {
+  const insets = useSafeAreaInsets();
   const [containerWidth, setContainerWidth] = useState(0);
   const [containerHeight, setContainerHeight] = useState(0);
   const tabCount = state.routes.length;
@@ -48,7 +50,7 @@ export function GlassTabBar({ state, navigation }: any) {
   }));
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       <View
         style={styles.container}
         onLayout={(e) => {
@@ -104,24 +106,24 @@ export function GlassTabBar({ state, navigation }: any) {
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 12,
     left: 20,
     right: 20,
     alignItems: 'center',
   },
   container: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(242,240,253,0.92)',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     borderRadius: 28,
     paddingVertical: 6,
     paddingHorizontal: 6,
     shadowColor: '#585594',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.12,
     shadowRadius: 20,
     elevation: 10,
     borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: 'rgba(88,85,148,0.15)',
   },
   indicator: {
     position: 'absolute',

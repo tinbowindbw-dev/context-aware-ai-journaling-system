@@ -146,12 +146,21 @@ export default function EventLayer() {
 
     const formattedTime = getFormattedTime();
 
+    // 附带最近一次自动事件的上下文（地点/天气），让手动事件也能显示位置信息
+    const latestAuto = events
+      .slice()
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .find(e => e.location || e.weather);
+
     addEvent({
       id: Date.now().toString(),
       time: formattedTime,
       title: manualTitle,
       isManual: true,
       timestamp: date.getTime(),
+      location: latestAuto?.location,
+      weather: latestAuto?.weather,
+      temperature: latestAuto?.temperature,
     });
 
     setManualTitle('');
@@ -372,13 +381,19 @@ export default function EventLayer() {
           ? data.title 
           : (data.description || 'Photo Event');
 
+        // 照片没有 GPS / 后端没解析出地点时，兜底附带最近已知上下文
+        const latestContext = events
+          .slice()
+          .sort((a, b) => b.timestamp - a.timestamp)
+          .find(e => e.location || e.weather);
+
         addEvent({
           id: Date.now().toString(),
           time: eventTime,
           title: finalTitle,
-          location: data.location || undefined,
-          weather: data.weather || undefined,
-          temperature: data.temperature || undefined,
+          location: data.location || latestContext?.location || undefined,
+          weather: data.weather || latestContext?.weather || undefined,
+          temperature: data.temperature || latestContext?.temperature || undefined,
           isManual: true,
           isPhoto: true,
           photoUri,
@@ -647,9 +662,10 @@ export default function EventLayer() {
                     {event.location && (
                       <Text style={styles.journeyLocationText}>{event.location}</Text>
                     )}
-                    {event.weather && (
+                    {event.weather && event.weather !== 'Unknown' && (
                       <Text style={styles.journeyWeatherText}>
-                        {event.weather}{event.temperature ? `, ${event.temperature}°C` : ''}
+                        {event.weather}
+                        {event.temperature && event.temperature !== 'N/A' ? `, ${event.temperature}°C` : ''}
                       </Text>
                     )}
                   </View>
@@ -772,7 +788,7 @@ export default function EventLayer() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fbf9f4' },
-  scrollContent: { paddingHorizontal: 18, paddingTop: 50, paddingBottom: 80 },
+  scrollContent: { paddingHorizontal: 18, paddingTop: 50, paddingBottom: 130 },
 
   header: { marginBottom: 16 },
   greetingSubText: { fontSize: 16, color: '#787681', fontWeight: '500' },

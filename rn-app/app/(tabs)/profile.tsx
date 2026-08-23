@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     header: { paddingTop: 56, paddingBottom: 16, paddingHorizontal: 22 },
     greetingText: { fontSize: 15, color: '#787681', fontWeight: '500' },
     headerTitle: { fontSize: 28, fontWeight: '700', color: '#1b1c19', marginTop: 2 },
-    scrollContent: { paddingHorizontal: 18, paddingBottom: 100 },
+    scrollContent: { paddingHorizontal: 18, paddingBottom: 130 },
 
     userCard: {
         flexDirection: 'row',

@@ -152,11 +152,13 @@ async def interpret_event(event: EventEntry):
 class PhotoAnalyzeRequest(BaseModel):
     base64_image: str
     user_id: Optional[str] = "Unknown"
+    gps: Optional[dict] = None
 
 @app.post("/analyze_photo")
 async def analyze_photo(data: PhotoAnalyzeRequest):
     """
     Uses Qwen VL to analyze a photo and return an event title.
+    Also resolves GPS → location name + weather when GPS metadata is attached.
     """
     try:
         print(f"[{data.user_id}] [Analyze Photo] Request received, image length: {len(data.base64_image) if data.base64_image else 0} chars")
@@ -168,11 +170,34 @@ async def analyze_photo(data: PhotoAnalyzeRequest):
         title, description = generate_title_from_image(data.base64_image)
         
         print(f"[{data.user_id}] [Analyze Photo] Result - title: {title!r}, description: {description[:100]!r}...")
-        
+
+        # 解析照片 GPS → 地点名 + 天气（前端可能附带 gps 元数据）
+        location = None
+        weather = None
+        temperature = None
+        if data.gps and data.gps.get("latitude") is not None and data.gps.get("longitude") is not None:
+            try:
+                geo_res = reverse_geocode_amap(data.gps["longitude"], data.gps["latitude"])
+                if geo_res.get("status") == "1":
+                    location = geo_res.get("top_poi") or geo_res.get("formatted_address")
+                    adcode = geo_res.get("adcode")
+                    if adcode:
+                        weather_data = get_weather_amap(adcode)
+                        weather = weather_data.get("weather")
+                        temperature = weather_data.get("temperature")
+                    print(f"[{data.user_id}] [Analyze Photo] GPS resolved: location={location!r}, weather={weather!r}, temp={temperature!r}")
+                else:
+                    print(f"[{data.user_id}] [Analyze Photo] GPS geocode failed: {geo_res.get('info')}")
+            except Exception as geo_err:
+                print(f"[{data.user_id}] [Analyze Photo] GPS resolution error: {geo_err}")
+
         return {
             "success": True,
             "title": title,
-            "description": description
+            "description": description,
+            "location": location,
+            "weather": weather,
+            "temperature": temperature,
         }
     except HTTPException:
         raise

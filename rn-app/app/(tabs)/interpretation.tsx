@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -41,15 +42,41 @@ export default function InterpretationLayer() {
     isGeneratingStory,
     setGeneratingStory,
     setStoryDraft,
+    updateEventText,
   } = useStore();
 
   const [isRefreshingClips, setIsRefreshingClips] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<typeof events[number] | null>(null);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDetail, setEditDetail] = useState('');
 
   // 只取带照片的事件，最新的在前
   const mediaEvents = events
     .filter((e) => (e.isPhoto && e.photoUri) || (e.isVideo && e.videoUri))
     .sort((a, b) => b.timestamp - a.timestamp);
+
+  const startEditing = (event: typeof events[number]) => {
+    setEditingEventId(event.id);
+    setEditTitle(event.title);
+    setEditDetail(event.additional_info || '');
+  };
+
+  const saveEditing = () => {
+    if (!selectedEvent) return;
+    const newTitle = editTitle.trim();
+    const newDetail = editDetail.trim();
+    updateEventText(selectedEvent.id, {
+      title: newTitle || selectedEvent.title,
+      additional_info: newDetail,
+    });
+    setSelectedEvent({
+      ...selectedEvent,
+      title: newTitle || selectedEvent.title,
+      additional_info: newDetail,
+    });
+    setEditingEventId(null);
+  };
 
   const handleManualRefreshClips = async () => {
     setIsRefreshingClips(true);
@@ -257,18 +284,76 @@ export default function InterpretationLayer() {
                     {selectedEvent.location}
                   </Text>
                 ) : null}
+                {editingEventId === selectedEvent?.id ? (
+                  <TouchableOpacity
+                    style={styles.editToggleBtn}
+                    onPress={saveEditing}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="checkmark" size={18} color="#fff" />
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.editToggleBtnOutline}
+                    onPress={() => selectedEvent && startEditing(selectedEvent)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="pencil" size={16} color="#585594" />
+                  </TouchableOpacity>
+                )}
               </View>
-              <Text style={styles.modalTitle}>{selectedEvent?.title}</Text>
-              {selectedEvent?.additional_info ? (
+              {editingEventId === selectedEvent?.id ? (
+                <TextInput
+                  style={styles.editTitleInput}
+                  value={editTitle}
+                  onChangeText={setEditTitle}
+                  multiline
+                  placeholder="Event title"
+                  placeholderTextColor="#b0adb8"
+                />
+              ) : (
+                <Text style={styles.modalTitle}>{selectedEvent?.title}</Text>
+              )}
+              {editingEventId === selectedEvent?.id ? (
+                <TextInput
+                  style={styles.editDetailInput}
+                  value={editDetail}
+                  onChangeText={setEditDetail}
+                  multiline
+                  placeholder="Add a detailed description..."
+                  placeholderTextColor="#b0adb8"
+                />
+              ) : selectedEvent?.additional_info ? (
                 <Text style={styles.modalDetail}>{selectedEvent.additional_info}</Text>
               ) : null}
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setSelectedEvent(null)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.modalCloseText}>Close</Text>
-              </TouchableOpacity>
+              <View style={styles.editingActionsRow}>
+                {editingEventId === selectedEvent?.id ? (
+                  <>
+                    <TouchableOpacity
+                      style={styles.editCancelBtn}
+                      onPress={() => setEditingEventId(null)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.editCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.editSaveBtn}
+                      onPress={saveEditing}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.editSaveText}>Save</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.modalCloseBtn}
+                    onPress={() => setSelectedEvent(null)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.modalCloseText}>Close</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </View>
         </View>
@@ -293,7 +378,7 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, color: '#787681', textAlign: 'center', lineHeight: 20 },
 
   // Scroll
-  scrollContent: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 140 },
+  scrollContent: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 170 },
 
   // Event Card（缩略图 + 简短文字）
   eventCard: {
@@ -328,6 +413,46 @@ const styles = StyleSheet.create({
   modalLocation: { flex: 1, fontSize: 13, fontWeight: '600', color: '#787681', textAlign: 'right' },
   modalTitle: { fontSize: 18, fontWeight: '700', color: '#1b1c19', marginTop: 6 },
   modalDetail: { fontSize: 14, color: '#474650', lineHeight: 22, marginTop: 8, fontStyle: 'italic' },
+  editToggleBtn: {
+    padding: 6,
+    backgroundColor: '#585594',
+    borderRadius: 16,
+  },
+  editToggleBtnOutline: {
+    padding: 6,
+    backgroundColor: '#f5f3ee',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e3dfff',
+  },
+  editTitleInput: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1b1c19',
+    marginTop: 6,
+    backgroundColor: '#f5f3ee',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  editDetailInput: {
+    fontSize: 14,
+    color: '#474650',
+    lineHeight: 22,
+    marginTop: 8,
+    fontStyle: 'italic',
+    backgroundColor: '#f5f3ee',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  editingActionsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 18 },
+  editSaveBtn: { paddingVertical: 10, paddingHorizontal: 24, borderRadius: 20, backgroundColor: '#585594' },
+  editSaveText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  editCancelBtn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e3dfff' },
+  editCancelText: { color: '#585594', fontWeight: '700', fontSize: 14 },
   modalCloseBtn: { alignSelf: 'center', marginTop: 18, backgroundColor: '#585594', paddingVertical: 10, paddingHorizontal: 28, borderRadius: 20 },
   modalCloseText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 

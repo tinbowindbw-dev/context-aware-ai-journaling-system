@@ -37,15 +37,33 @@ const getTextColorForMood = (mood: MoodType): string => {
 };
 
 export default function ArchiveLayer() {
-    const { stories, updateStoryIllustration } = useStore();
+    const { stories, updateStoryIllustration, updateStoryText } = useStore();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedDayStories, setSelectedDayStories] = useState<StoryItem[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedDateStr, setSelectedDateStr] = useState('');
     const [isGeneratingIllustration, setIsGeneratingIllustration] = useState(false);
+    const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
+    const [editStoryText, setEditStoryText] = useState('');
 
     const selectedStory = selectedDayStories[0];
+
+    const startEditStory = (story: StoryItem) => {
+        setEditingStoryId(story.id);
+        setEditStoryText(story.text);
+    };
+
+    const saveEditStory = (storyId: string) => {
+        const newText = editStoryText.trim();
+        if (!newText) return;
+        updateStoryText(storyId, newText);
+        // 同步更新页面内展示的数据（story 列表 + modal）
+        setSelectedDayStories((current) => current.map((s) => (
+            s.id === storyId ? { ...s, text: newText } : s
+        )));
+        setEditingStoryId(null);
+    };
 
     const waitForIllustration = async (taskId: string): Promise<string> => {
         for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -326,11 +344,37 @@ export default function ArchiveLayer() {
                                                 )}
                                             </View>
                                         </View>
-                                        <TouchableOpacity onPress={() => confirmDelete(story.id)}>
-                                            <Ionicons name="trash-outline" size={18} color="#ccc" />
-                                        </TouchableOpacity>
+                                        <View style={styles.entryHeaderActions}>
+                                            <TouchableOpacity onPress={() => startEditStory(story)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                                <Ionicons name="pencil-outline" size={18} color="#ccc" />
+                                            </TouchableOpacity>
+                                            <TouchableOpacity onPress={() => confirmDelete(story.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                                <Ionicons name="trash-outline" size={18} color="#ccc" />
+                                            </TouchableOpacity>
+                                        </View>
                                     </View>
-                                    <Text style={styles.entryText}>{story.text}</Text>
+                                    {editingStoryId === story.id ? (
+                                        <>
+                                            <TextInput
+                                                style={styles.entryEditInput}
+                                                value={editStoryText}
+                                                onChangeText={setEditStoryText}
+                                                multiline
+                                                placeholder="Edit your journal entry..."
+                                                placeholderTextColor="#b0adb8"
+                                            />
+                                            <View style={styles.entryEditActions}>
+                                                <TouchableOpacity style={styles.entryEditCancelBtn} onPress={() => setEditingStoryId(null)} activeOpacity={0.8}>
+                                                    <Text style={styles.entryEditCancelText}>Cancel</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity style={styles.entryEditSaveBtn} onPress={() => saveEditStory(story.id)} activeOpacity={0.85}>
+                                                    <Text style={styles.entryEditSaveText}>Save</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </>
+                                    ) : (
+                                        <Text style={styles.entryText}>{story.text}</Text>
+                                    )}
                                 </View>
                             );
                         })
@@ -413,14 +457,46 @@ export default function ArchiveLayer() {
                                                 <View style={styles.styleBadge}>
                                                     <Text style={styles.styleBadgeText}>{story.style}</Text>
                                                 </View>
-                                                <TouchableOpacity onPress={() => {
-                                                    setModalVisible(false);
-                                                    confirmDelete(story.id);
-                                                }}>
-                                                    <Ionicons name="trash-outline" size={16} color="#ccc" />
-                                                </TouchableOpacity>
+                                                <View style={styles.modalCardActions}>
+                                                    {editingStoryId === story.id ? (
+                                                        <TouchableOpacity onPress={() => saveEditStory(story.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                                            <Ionicons name="checkmark" size={18} color="#585594" />
+                                                        </TouchableOpacity>
+                                                    ) : (
+                                                        <TouchableOpacity onPress={() => startEditStory(story)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                                            <Ionicons name="pencil-outline" size={16} color="#ccc" />
+                                                        </TouchableOpacity>
+                                                    )}
+                                                    <TouchableOpacity onPress={() => {
+                                                        setModalVisible(false);
+                                                        confirmDelete(story.id);
+                                                    }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                                        <Ionicons name="trash-outline" size={16} color="#ccc" />
+                                                    </TouchableOpacity>
+                                                </View>
                                             </View>
-                                            <Text style={styles.modalStoryText}>{story.text}</Text>
+                                            {editingStoryId === story.id ? (
+                                                <>
+                                                    <TextInput
+                                                        style={styles.modalEditInput}
+                                                        value={editStoryText}
+                                                        onChangeText={setEditStoryText}
+                                                        multiline
+                                                        placeholder="Edit your journal entry..."
+                                                        placeholderTextColor="#b0adb8"
+                                                    />
+                                                    <View style={styles.entryEditActions}>
+                                                        <TouchableOpacity style={styles.entryEditCancelBtn} onPress={() => setEditingStoryId(null)} activeOpacity={0.8}>
+                                                            <Text style={styles.entryEditCancelText}>Cancel</Text>
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity style={styles.entryEditSaveBtn} onPress={() => saveEditStory(story.id)} activeOpacity={0.85}>
+                                                            <Text style={styles.entryEditSaveText}>Save</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                </>
+                                            ) : (
+                                                <Text style={styles.modalStoryText}>{story.text}</Text>
+                                            )}
                                         </View>
                                     </View>
                                 );
@@ -438,7 +514,7 @@ const styles = StyleSheet.create({
     header: { paddingTop: 56, paddingBottom: 16, paddingHorizontal: 22 },
     greetingText: { fontSize: 15, color: '#787681', fontWeight: '500' },
     headerTitle: { fontSize: 28, fontWeight: '700', color: '#1b1c19', marginTop: 2 },
-    scrollContent: { paddingHorizontal: 18, paddingBottom: 100 },
+    scrollContent: { paddingHorizontal: 18, paddingBottom: 130 },
 
     // Calendar Card
     card: {
@@ -529,6 +605,7 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     entryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
+    entryHeaderActions: { flexDirection: 'row', gap: 14, alignItems: 'center' },
     entryMeta: { flex: 1, marginRight: 10 },
     entryDate: { fontSize: 13, fontWeight: '700', color: '#585594', marginBottom: 4 },
     badgeRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
@@ -537,6 +614,23 @@ const styles = StyleSheet.create({
     moodBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
     moodBadgeText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
     entryText: { fontSize: 14, color: '#474650', lineHeight: 21, fontStyle: 'italic' },
+    entryEditInput: {
+        backgroundColor: '#f5f3ee',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 14,
+        color: '#1b1c19',
+        lineHeight: 21,
+        minHeight: 80,
+        textAlignVertical: 'top',
+        marginBottom: 10,
+    },
+    entryEditActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+    entryEditSaveBtn: { backgroundColor: '#585594', paddingVertical: 7, paddingHorizontal: 18, borderRadius: 12 },
+    entryEditSaveText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+    entryEditCancelBtn: { paddingVertical: 7, paddingHorizontal: 12, borderWidth: 1, borderColor: '#e3dfff', borderRadius: 12, backgroundColor: '#fff' },
+    entryEditCancelText: { color: '#585594', fontWeight: '600', fontSize: 13 },
 
     // Modal
     modalOverlay: {
@@ -603,7 +697,20 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 10,
     },
+    modalCardActions: { flexDirection: 'row', gap: 14, alignItems: 'center' },
     modalStoryText: { fontSize: 15, color: '#474650', lineHeight: 24, fontStyle: 'italic' },
+    modalEditInput: {
+        backgroundColor: '#f5f3ee',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 15,
+        color: '#1b1c19',
+        lineHeight: 24,
+        minHeight: 120,
+        textAlignVertical: 'top',
+        marginBottom: 10,
+    },
     storyIllustration: {
         width: '88%',
         height: 190,

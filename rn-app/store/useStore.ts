@@ -83,6 +83,10 @@ interface StoreState {
         }
     ) => void;
     renameEvent: (id: string, newTitle: string) => void;
+    updateEventText: (
+        id: string,
+        patch: Partial<Pick<EventItem, 'title' | 'additional_info'>>
+    ) => void;
     deleteEvent: (id: string) => void;
     addClip: (clip: ClipItem) => void;
     updateClip: (id: string, text: string, title?: string) => void;
@@ -96,6 +100,7 @@ interface StoreState {
     updateStoryDraftText: (text: string) => void;
     addStory: (story: StoryItem) => void;
     updateStoryIllustration: (id: string, illustrationUri: string) => void;
+    updateStoryText: (id: string, text: string) => void;
     deleteStory: (id: string) => void;
     setGeneratingStory: (val: boolean) => void;
     // User Profile Actions
@@ -168,6 +173,14 @@ export const useStore = create<StoreState>()(
             renameEvent: (id, newTitle) => set((state) => ({
                 events: state.events.map((e) => e.id === id ? { ...e, title: newTitle } : e)
             })),
+            updateEventText: (id, patch) => {
+                void appendDevLog('event', 'text_update', { id, patch });
+                set((state) => ({
+                    events: state.events.map((e) => (
+                        e.id === id ? { ...e, ...patch } : e
+                    ))
+                }));
+            },
             deleteEvent: (id) => {
                 void appendDevLog('event', 'delete', { id });
                 set((state) => ({
@@ -245,6 +258,14 @@ export const useStore = create<StoreState>()(
                     story.id === id ? { ...story, illustrationUri } : story
                 ))
             })),
+            updateStoryText: (id, text) => {
+                void appendDevLog('story', 'text_update', { id });
+                set((state) => ({
+                    stories: state.stories.map((story) => (
+                        story.id === id ? { ...story, text } : story
+                    ))
+                }));
+            },
             deleteStory: (id) => set((state) => ({
                 stories: state.stories.filter((s) => s.id !== id)
             })),
