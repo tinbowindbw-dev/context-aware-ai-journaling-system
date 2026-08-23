@@ -125,6 +125,61 @@ def generate_title_from_image(base64_image: str) -> tuple[str, str]:
     return title, description
 
 
+def generate_title_from_video(video_bytes: bytes, filename: str = "video.mp4") -> tuple[str, str]:
+    """Upload a short video to DashScope and analyze it with a Qwen video model."""
+    if not QWEN_API_KEY:
+        raise RuntimeError("QWEN_API_KEY is not configured on the server.")
+    if not video_bytes:
+        raise ValueError("No video data was provided.")
+
+    video_model = "qwen2.5-vl-72b-instruct"
+    upload_endpoint = "https://dashscope.aliyuncs.com/api/v1/uploads"
+    upload_headers = {"Authorization": f"Bearer {QWEN_API_KEY}"}
+    mime_type = "video/quicktime" if filename.lower().endswith(".mov") else "video/mp4"
+
+    upload_response = requests.post(
+        upload_endpoint,
+        headers=upload_headers,
+        files={"file": (filename, video_bytes, mime_type)},
+        data={"model": video_model},
+        timeout=300,
+    )
+    upload_response.raise_for_status()
+    upload_data = upload_response.json()
+    uploaded_files = upload_data.get("data", {}).get("uploaded_files", []) or []
+    if not uploaded_files or not uploaded_files[0].get("url"):
+        raise RuntimeError(f"DashScope upload returned no video URL: {str(upload_data)[:300]}")
+
+    video_url = uploaded_files[0]["url"]
+    client = OpenAI(api_key=QWEN_API_KEY, base_url=QWEN_ENDPOINT, timeout=600.0)
+    completion = client.chat.completions.create(
+        model=video_model,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "video_url", "video_url": {"url": video_url}},
+                {
+                    "type": "text",
+                    "text": "Describe the main activity in this video as a short English event title (max 5 words), then provide a detailed factual description for a diary entry. Do not use Chinese characters. Output JSON only: {\"title\": \"<short title>\", \"description\": \"<detailed description>\"}",
+                },
+            ],
+        }],
+        max_tokens=1000,
+    )
+
+    content = (completion.choices[0].message.content or "").strip()
+    if content.startswith("```json"):
+        content = content.replace("```json", "").replace("```", "").strip()
+    elif content.startswith("```"):
+        content = content.replace("```", "").strip()
+
+    parsed = json.loads(content)
+    return (
+        (parsed.get("title") or "Video Event").strip(),
+        (parsed.get("description") or "A video was recorded.").strip(),
+    )
+
+
 def generate_interpretation_from_event(title: str, time: str = None, additional_info: str = None) -> str:
     """
     Step: Generates the interpretation based strictly on the Event Entry details.

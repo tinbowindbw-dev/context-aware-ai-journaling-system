@@ -4,14 +4,16 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -25,6 +27,8 @@ import { useStore } from '../../store/useStore';
 
 export default function EventLayer() {
   const { events, addEvent, renameEvent, deleteEvent, _hasHydrated } = useStore();
+  const cameraRef = useRef<CameraView>(null);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const [showInput, setShowInput] = useState(false);
   const [manualTitle, setManualTitle] = useState('');
@@ -37,7 +41,9 @@ export default function EventLayer() {
   const [tempRenameTitle, setTempRenameTitle] = useState('');
 
   // Photo Upload State
-  const [uploadingSource, setUploadingSource] = useState<'camera' | 'library' | null>(null);
+  const [uploadingSource, setUploadingSource] = useState<'camera' | 'library' | 'video' | null>(null);
+  const [showVideoCamera, setShowVideoCamera] = useState(false);
+  const [isRecordingVideo, setIsRecordingVideo] = useState(false);
 
   // Highlights Modal State
   const [showHighlights, setShowHighlights] = useState(false);
@@ -150,6 +156,105 @@ export default function EventLayer() {
 
     setManualTitle('');
     setShowInput(false);
+  };
+
+  const handleRecordedVideo = async (uri: string) => {
+    setShowVideoCamera(false);
+    setUploadingSource('video');
+
+    let videoUri = uri;
+    try {
+      const dir = `${FileSystem.documentDirectory}videos/`;
+      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+      const destination = `${dir}${Date.now()}.mp4`;
+      await FileSystem.copyAsync({ from: uri, to: destination });
+      videoUri = destination;
+    } catch (error) {
+      console.error('Failed to persist video:', error);
+    }
+
+    const now = new Date();
+    const eventTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri: videoUri,
+        name: 'event-video.mp4',
+        type: 'video/mp4',
+      } as any);
+      formData.append('user_id', useStore.getState().userName);
+
+      const response = await fetch(`${API_URL}/analyze_video`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || `Server error (HTTP ${response.status})`);
+      }
+
+      addEvent({
+        id: Date.now().toString(),
+        time: eventTime,
+        title: data.title || 'Video Event',
+        isManual: true,
+        isVideo: true,
+        videoUri,
+        additional_info: data.description || '',
+        timestamp: now.getTime(),
+      });
+    } catch (error) {
+      console.error('Video Analysis Error:', error);
+      Alert.alert(
+        'Video Analysis Failed',
+        error instanceof Error ? error.message : 'Unable to analyze the recorded video.'
+      );
+      addEvent({
+        id: Date.now().toString(),
+        time: eventTime,
+        title: 'Video Event',
+        isManual: true,
+        isVideo: true,
+        videoUri,
+        timestamp: now.getTime(),
+      });
+    } finally {
+      setUploadingSource(null);
+    }
+  };
+
+  const startVideoRecording = async () => {
+    if (!cameraRef.current || isRecordingVideo) return;
+
+    setIsRecordingVideo(true);
+    try {
+      const video = await cameraRef.current.recordAsync({ maxDuration: 15 });
+      if (video?.uri) await handleRecordedVideo(video.uri);
+    } catch (error) {
+      console.error('Video recording error:', error);
+      Alert.alert('Recording Failed', 'Unable to record the video.');
+    } finally {
+      setIsRecordingVideo(false);
+    }
+  };
+
+  const stopVideoRecording = () => {
+    if (cameraRef.current && isRecordingVideo) {
+      cameraRef.current.stopRecording();
+    }
+  };
+
+  const openVideoRecorder = async () => {
+    if (!cameraPermission?.granted) {
+      const permission = await requestCameraPermission();
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Camera access is needed to record a video.');
+        return;
+      }
+    }
+    setShowVideoCamera(true);
   };
 
   const handlePhotoEvent = async (source: 'camera' | 'library') => {
@@ -508,6 +613,24 @@ export default function EventLayer() {
                 {uploadingSource === 'library' ? 'Scanning' : 'Upload'}
               </Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionCardBtn}
+              onPress={openVideoRecorder}
+              disabled={uploadingSource !== null}
+              activeOpacity={0.85}
+            >
+              <View style={styles.actionIconCircle}>
+                {uploadingSource === 'video' ? (
+                  <ActivityIndicator size="small" color="#585594" />
+                ) : (
+                  <Ionicons name="videocam-outline" size={20} color="#585594" />
+                )}
+              </View>
+              <Text style={styles.actionCardText}>
+                {uploadingSource === 'video' ? 'Analyzing' : 'Video'}
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -549,7 +672,7 @@ export default function EventLayer() {
               <View style={styles.journeyBodyRow}>
                 <View style={styles.journeyIconWrapper}>
                   <Ionicons
-                    name={event.isPhoto ? "image-outline" : "bookmark-outline"}
+                    name={event.isVideo ? "videocam-outline" : event.isPhoto ? "image-outline" : "bookmark-outline"}
                     size={16}
                     color="#585594"
                   />
@@ -579,6 +702,43 @@ export default function EventLayer() {
         )}
 
       </ScrollView>
+
+      <Modal
+        visible={showVideoCamera}
+        animationType="slide"
+        onRequestClose={() => setShowVideoCamera(false)}
+      >
+        <View style={styles.videoCameraScreen}>
+          <CameraView
+            ref={cameraRef}
+            style={styles.videoCameraPreview}
+            facing="back"
+            mode="video"
+            videoQuality="480p"
+          />
+          <View style={styles.videoCameraControls}>
+            <TouchableOpacity
+              style={styles.videoCancelButton}
+              onPress={() => setShowVideoCamera(false)}
+            >
+              <Ionicons name="close" size={26} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.recordButton, isRecordingVideo && styles.recordButtonActive]}
+              onPressIn={startVideoRecording}
+              onPressOut={stopVideoRecording}
+              disabled={isRecordingVideo && uploadingSource !== null}
+              activeOpacity={0.85}
+            >
+              <View style={styles.recordButtonInner} />
+            </TouchableOpacity>
+            <View style={styles.videoControlSpacer} />
+          </View>
+          <Text style={styles.recordHint}>
+            {isRecordingVideo ? 'Release to finish' : 'Hold to record, up to 15 seconds'}
+          </Text>
+        </View>
+      </Modal>
 
       {/* Highlights Modal — Full AI Analysis */}
       {showHighlights && (
@@ -663,6 +823,16 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   actionCardText: { fontSize: 12, fontWeight: '600', color: '#1b1c19' },
+
+  videoCameraScreen: { flex: 1, backgroundColor: '#000', justifyContent: 'flex-end' },
+  videoCameraPreview: { ...StyleSheet.absoluteFillObject },
+  videoCameraControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 32, paddingBottom: 54 },
+  videoCancelButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(27,28,25,0.55)', justifyContent: 'center', alignItems: 'center' },
+  videoControlSpacer: { width: 48, height: 48 },
+  recordButton: { width: 76, height: 76, borderRadius: 38, borderWidth: 5, borderColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  recordButtonActive: { borderColor: '#ff5b68' },
+  recordButtonInner: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#ff5b68' },
+  recordHint: { position: 'absolute', bottom: 20, alignSelf: 'center', color: '#fff', fontSize: 12, fontWeight: '600' },
 
   timelineSectionTitle: { fontSize: 18, fontWeight: '700', color: '#1b1c19', marginBottom: 12, paddingLeft: 2 },
   timelineList: { gap: 12 },

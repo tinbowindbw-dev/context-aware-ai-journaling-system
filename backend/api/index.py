@@ -1,6 +1,6 @@
 import os
 import time as _time
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -14,6 +14,7 @@ try:
         evaluate_and_generate_clip,
         generate_story_from_clips,
         generate_title_from_image,
+        generate_title_from_video,
         decide_mood_prompt_timing
     )
     from .amap import reverse_geocode_amap, get_weather_amap
@@ -25,6 +26,7 @@ except ImportError:
         evaluate_and_generate_clip,
         generate_story_from_clips,
         generate_title_from_image,
+        generate_title_from_video,
         decide_mood_prompt_timing
     )
     from amap import reverse_geocode_amap, get_weather_amap
@@ -147,6 +149,26 @@ async def analyze_photo(data: PhotoAnalyzeRequest):
         print(f"[{data.user_id}] Photo analysis error: {e}")
         import traceback
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/analyze_video")
+async def analyze_video(file: UploadFile = File(...), user_id: str = Form("Unknown")):
+    """Analyze a short recorded video and return an event title and description."""
+    try:
+        video_bytes = await file.read()
+        if not video_bytes or len(video_bytes) < 1024:
+            raise HTTPException(status_code=400, detail="No valid video data provided.")
+
+        title, description = generate_title_from_video(
+            video_bytes,
+            file.filename or "video.mp4",
+        )
+        return {"success": True, "title": title, "description": description}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[{user_id}] Video analysis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class FilterLocationRequest(BaseModel):

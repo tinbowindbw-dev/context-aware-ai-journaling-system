@@ -10,6 +10,8 @@ export interface EventItem {
     isManual: boolean;
     isPhoto?: boolean;
     photoUri?: string; // 持久化的照片文件路径（文档目录）
+    isVideo?: boolean;
+    videoUri?: string; // 持久化的视频文件路径（文档目录）
     additional_info?: string;
     location?: string;
     weather?: string;

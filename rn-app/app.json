@@ -57,6 +57,12 @@
       ],
       "expo-task-manager",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to record video events."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
@@ -69,7 +75,8 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "./plugins/withNativeLocation"
+      "./plugins/withNativeLocation",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

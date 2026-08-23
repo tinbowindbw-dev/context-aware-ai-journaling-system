@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,6 +19,21 @@ import { API_URL } from '../../constants/Config';
 import { getLocalDateString } from '../../utils/date';
 import { evaluateRecentClips } from '../../utils/clipLogic';
 
+function EventVideoPlayer({ uri, preview = false }: { uri: string; preview?: boolean }) {
+  const player = useVideoPlayer(uri, (videoPlayer) => {
+    videoPlayer.loop = true;
+  });
+
+  return (
+    <VideoView
+      player={player}
+      style={preview ? styles.eventThumb : styles.modalVideo}
+      nativeControls={!preview}
+      contentFit="cover"
+    />
+  );
+}
+
 export default function InterpretationLayer() {
   const {
     clips,
@@ -31,8 +47,8 @@ export default function InterpretationLayer() {
   const [selectedEvent, setSelectedEvent] = useState<typeof events[number] | null>(null);
 
   // 只取带照片的事件，最新的在前
-  const photoEvents = events
-    .filter((e) => e.isPhoto && e.photoUri)
+  const mediaEvents = events
+    .filter((e) => (e.isPhoto && e.photoUri) || (e.isVideo && e.videoUri))
     .sort((a, b) => b.timestamp - a.timestamp);
 
   const handleManualRefreshClips = async () => {
@@ -120,8 +136,8 @@ export default function InterpretationLayer() {
         </View>
       </View>
 
-      {/* Photo Events List */}
-      {photoEvents.length === 0 ? (
+      {/* Photo and Video Events List */}
+      {mediaEvents.length === 0 ? (
         <View style={styles.emptyArea}>
           <View style={styles.emptyIconCircle}>
             <Ionicons name="images-outline" size={32} color="#b0adb8" />
@@ -136,15 +152,24 @@ export default function InterpretationLayer() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {photoEvents.map((event) => (
+          {mediaEvents.map((event) => (
             <TouchableOpacity
               key={event.id}
               style={styles.eventCard}
               onPress={() => setSelectedEvent(event)}
               activeOpacity={0.85}
             >
-              {/* 缩略图 */}
-              <Image source={{ uri: event.photoUri }} style={styles.eventThumb} contentFit="cover" />
+              {/* 缩略图或视频预览 */}
+              {event.isVideo && event.videoUri ? (
+                <View style={styles.mediaThumbWrap}>
+                  <EventVideoPlayer uri={event.videoUri} preview />
+                  <View style={styles.videoPlayBadge}>
+                    <Ionicons name="play" size={14} color="#fff" />
+                  </View>
+                </View>
+              ) : (
+                <Image source={{ uri: event.photoUri }} style={styles.eventThumb} contentFit="cover" />
+              )}
 
               {/* 简短文字：时间 / 地点 / 标题 */}
               <View style={styles.eventInfoCol}>
@@ -213,8 +238,10 @@ export default function InterpretationLayer() {
             onPress={() => setSelectedEvent(null)}
           />
           <View style={styles.modalCard}>
-            {/* 上方：拍摄的图片 */}
-            {selectedEvent?.photoUri ? (
+            {/* 上方：拍摄的图片或视频 */}
+            {selectedEvent?.isVideo && selectedEvent.videoUri ? (
+              <EventVideoPlayer uri={selectedEvent.videoUri} />
+            ) : selectedEvent?.photoUri ? (
               <Image
                 source={{ uri: selectedEvent.photoUri }}
                 style={styles.modalImage}
@@ -276,6 +303,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06, shadowRadius: 16, elevation: 3,
   },
   eventThumb: { width: 84, height: 84, borderRadius: 18, backgroundColor: '#f5f3ee' },
+  mediaThumbWrap: { width: 84, height: 84, borderRadius: 18, overflow: 'hidden', backgroundColor: '#f5f3ee' },
+  videoPlayBadge: { position: 'absolute', left: 32, top: 32, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(27,28,25,0.65)', justifyContent: 'center', alignItems: 'center', paddingLeft: 2 },
   eventInfoCol: { flex: 1, justifyContent: 'center' },
   eventTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   eventTime: { fontSize: 18, fontWeight: '700', color: '#585594' },
@@ -292,6 +321,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25, shadowRadius: 20, elevation: 10,
   },
   modalImage: { width: '100%', height: 220, backgroundColor: '#f5f3ee' },
+  modalVideo: { width: '100%', height: 220, backgroundColor: '#1b1c19' },
   modalBody: { padding: 20 },
   modalTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   modalTime: { fontSize: 18, fontWeight: '700', color: '#585594' },
