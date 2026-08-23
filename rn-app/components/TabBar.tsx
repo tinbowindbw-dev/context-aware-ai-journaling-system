@@ -88,7 +88,7 @@ export function GlassTabBar({ state, navigation }: any) {
               <MaterialIcons
                 name={iconName}
                 size={22}
-                color={isFocused ? '#585594' : '#b0adb8'}
+                color={isFocused ? '#585594' : '#8f8ca0'}
               />
               <Text style={[styles.label, isFocused && styles.labelActive]}>
                 {label}
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(228,225,245,0.82)',
+    backgroundColor: 'rgba(242,240,253,0.92)',
     borderRadius: 28,
     paddingVertical: 6,
     paddingHorizontal: 6,
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
   },
   indicator: {
     position: 'absolute',
-    backgroundColor: '#e3dfff',
+    backgroundColor: '#e9e5ff',
     borderRadius: 26,
     opacity: 0.75,
   },
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 10.5,
     fontWeight: '600',
-    color: '#b0adb8',
+    color: '#8f8ca0',
     marginTop: 3,
     textAlign: 'center',
   },
