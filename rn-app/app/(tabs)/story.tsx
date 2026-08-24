@@ -14,7 +14,7 @@ const MOOD_COLORS: Record<MoodType, string> = {
     positive: '#FFD700',
     calm: '#A2D149',
     stressed: '#FFA500',
-    negative: '#85929E',
+    negative: '#6C9BD1',  // Soft blue - sad, lonely
 };
 
 const MOOD_LABELS: Record<MoodType, string> = {
@@ -47,16 +47,31 @@ export default function StoryLayer() {
     const todayClips = clips
       .filter(c => c.slotId.startsWith(today))
       .sort((a, b) => a.createdAt - b.createdAt);
-  
-    if (todayClips.length === 0) {
-      Alert.alert("No Clips", "No clips found for today to generate a story.");
+
+    const todayEvents = events
+      .filter(e => getLocalDateString(new Date(e.timestamp)) === today)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    if (todayClips.length === 0 && todayEvents.length === 0) {
+      Alert.alert("No Events", "No events or clips found for today to generate a story.");
       return;
     }
-  
-    const clipsText = todayClips.map(c => c.text).join("\n\n");
-    const eventSummaries = events
-      .filter(e => getLocalDateString(new Date(e.timestamp)) === today)
-      .sort((a, b) => a.timestamp - b.timestamp)
+
+    // 优先用 clips；没有 clips 时降级用当天事件摘要
+    const clipsText = todayClips.length > 0
+      ? todayClips.map(c => c.text).join("\n\n")
+      : todayEvents
+        .map(e => {
+          const parts = [`[${e.time}] ${e.title}`];
+          if (e.duration && e.duration > 0) parts.push(`Duration: ${Math.round(e.duration)}m`);
+          if (e.weather && e.weather !== 'Unknown') parts.push(`Weather: ${e.weather}, ${e.temperature}`);
+          if (e.mood) parts.push(`Mood: ${e.mood}`);
+          if (e.additional_info) parts.push(`Context: ${e.additional_info}`);
+          return parts.join(' | ');
+        })
+        .join("\n");
+
+    const eventSummaries = todayEvents
       .map(e => {
         const parts = [`[${e.time}] ${e.title}`];
         if (e.duration && e.duration > 0) parts.push(`Duration: ${Math.round(e.duration)}m`);
@@ -143,7 +158,7 @@ export default function StoryLayer() {
                 >
                   <Text style={[
                     styles.moodChipText,
-                    currentStoryDraft.mood === m && { color: m === 'negative' ? '#fff' : '#000' }
+                    currentStoryDraft.mood === m && { color: '#000' }
                   ]}>
                     {MOOD_LABELS[m]}
                   </Text>

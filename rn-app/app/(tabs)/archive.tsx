@@ -18,7 +18,7 @@ const MOOD_COLORS: Record<MoodType, string> = {
     positive: '#FFD700',  // Warm yellow - happy, excited
     calm: '#A2D149',  // Grass green - relaxed, peaceful
     stressed: '#FFA500',  // Orange - busy, anxious
-    negative: '#85929E',  // Slate blue - sad, lonely
+    negative: '#6C9BD1',  // Soft blue - sad, lonely
 };
 
 const MOOD_LABELS: Record<MoodType, string> = {
@@ -28,13 +28,8 @@ const MOOD_LABELS: Record<MoodType, string> = {
     negative: 'Negative',
 };
 
-// Returns a readable text color (dark/light) based on background
-const getTextColorForMood = (mood: MoodType): string => {
-    // positive (#FFD700) and calm (#A2D149) are bright — use dark text
-    // stressed (#FFA500) is medium-bright — dark text
-    // negative (#85929E) is medium-dark — use white text
-    return mood === 'negative' ? '#fff' : '#1a1a1a';
-};
+// All four mood colors are light/medium enough to always use dark text
+const getTextColorForMood = (_mood: MoodType): string => '#1a1a1a';
 
 export default function ArchiveLayer() {
     const { stories, updateStoryIllustration, updateStoryText } = useStore();
@@ -195,7 +190,7 @@ export default function ArchiveLayer() {
             const mood: MoodType | undefined = hasStory ? dayStories[0].mood : undefined;
             // Determine circle background color
             const circleBg = hasStory
-                ? (mood ? MOOD_COLORS[mood] : '#2C2C2E')
+                ? (mood ? MOOD_COLORS[mood] : '#E0E0E0')
                 : undefined;
             // Determine text color: always ensure contrast
             let dotTextColor: string;
@@ -203,8 +198,8 @@ export default function ArchiveLayer() {
                 dotTextColor = isToday ? '#000' : '#333';
             } else {
                 // If there's a mood, ensure we use a color that contrasts with the background
-                // 'negative' is dark slate blue, use white. Others are bright/yellow/green, use dark.
-                dotTextColor = (mood === 'negative') ? '#fff' : '#1a1a1a';
+                // 'negative' is light gray, use dark text. Others are bright/yellow/green, use dark.
+                dotTextColor = '#1a1a1a';
             }
 
             currentDayRow.push(

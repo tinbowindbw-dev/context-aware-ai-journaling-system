@@ -24,6 +24,9 @@ const LABELS: Record<string, string> = {
   profile: 'Profile',
 };
 
+const TAB_ACTIVE_COLOR = '#585594';
+const TAB_INACTIVE_COLOR = '#8f8ca0';
+
 export function GlassTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const [containerWidth, setContainerWidth] = useState(0);
@@ -90,7 +93,7 @@ export function GlassTabBar({ state, navigation }: any) {
               <MaterialIcons
                 name={iconName}
                 size={22}
-                color={isFocused ? '#585594' : '#8f8ca0'}
+                color={isFocused ? TAB_ACTIVE_COLOR : TAB_INACTIVE_COLOR}
               />
               <Text style={[styles.label, isFocused && styles.labelActive]}>
                 {label}
@@ -113,11 +116,11 @@ const styles = StyleSheet.create({
   },
   container: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.88)',
+    backgroundColor: '#f8f7fc',
     borderRadius: 28,
     paddingVertical: 6,
     paddingHorizontal: 6,
-    shadowColor: '#585594',
+    shadowColor: TAB_ACTIVE_COLOR,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
     shadowRadius: 20,
@@ -141,12 +144,12 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 10.5,
     fontWeight: '600',
-    color: '#8f8ca0',
+    color: TAB_INACTIVE_COLOR,
     marginTop: 3,
     textAlign: 'center',
   },
   labelActive: {
-    color: '#585594',
+    color: TAB_ACTIVE_COLOR,
     fontWeight: '700',
   },
 });

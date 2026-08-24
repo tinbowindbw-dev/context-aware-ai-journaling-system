@@ -50,6 +50,7 @@ export default function InterpretationLayer() {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDetail, setEditDetail] = useState('');
+  const [showFullImage, setShowFullImage] = useState(false);
 
   // 只取带照片的事件，最新的在前
   const mediaEvents = events
@@ -97,18 +98,34 @@ export default function InterpretationLayer() {
       .filter((c) => c.slotId.startsWith(today))
       .sort((a, b) => a.createdAt - b.createdAt);
 
-    if (todayClips.length === 0) {
+    const todayEvents = events
+      .filter((e) => getLocalDateString(new Date(e.timestamp)) === today)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    // 当天没有任何事件也没有 clips，直接提示
+    if (todayClips.length === 0 && todayEvents.length === 0) {
       Alert.alert(
-        'No Clips Today',
-        'AI creates interpretation clips every hour. Once you have at least one clip from today, you can generate your daily story!'
+        'No Events Today',
+        'Add a moment on the Event page first, then generate your daily story!'
       );
       return;
     }
 
-    const clipsText = todayClips.map((c) => c.text).join('\n\n');
-    const eventSummaries = events
-      .filter((e) => getLocalDateString(new Date(e.timestamp)) === today)
-      .sort((a, b) => a.timestamp - b.timestamp)
+    // 优先用 AI 生成的 clips；如果还没有 clips，降级用当天事件摘要直接生成
+    const clipsText = todayClips.length > 0
+      ? todayClips.map((c) => c.text).join('\n\n')
+      : todayEvents
+        .map((e) => {
+          const parts = [`[${e.time}] ${e.title}`];
+          if (e.duration && e.duration > 0) parts.push(`Duration: ${Math.round(e.duration)}m`);
+          if (e.weather && e.weather !== 'Unknown') parts.push(`Weather: ${e.weather}, ${e.temperature}`);
+          if (e.mood) parts.push(`Mood: ${e.mood}`);
+          if (e.additional_info) parts.push(`Context: ${e.additional_info}`);
+          return parts.join(' | ');
+        })
+        .join('\n');
+
+    const eventSummaries = todayEvents
       .map((e) => {
         const parts = [`[${e.time}] ${e.title}`];
         if (e.duration && e.duration > 0) parts.push(`Duration: ${Math.round(e.duration)}m`);
@@ -198,7 +215,7 @@ export default function InterpretationLayer() {
                 <Image source={{ uri: event.photoUri }} style={styles.eventThumb} contentFit="cover" />
               )}
 
-              {/* 简短文字：时间 / 地点 / 标题 */}
+              {/* 简短文字：时间 / 地点 / 天气 / 标题 */}
               <View style={styles.eventInfoCol}>
                 <View style={styles.eventTimeRow}>
                   <Text style={styles.eventTime}>{event.time}</Text>
@@ -206,6 +223,12 @@ export default function InterpretationLayer() {
                     <Text style={styles.eventLocation} numberOfLines={1}>{event.location}</Text>
                   ) : null}
                 </View>
+                {event.weather && event.weather !== 'Unknown' ? (
+                  <Text style={styles.eventWeather} numberOfLines={1}>
+                    {event.weather}
+                    {event.temperature && event.temperature !== 'N/A' ? `, ${event.temperature}°C` : ''}
+                  </Text>
+                ) : null}
                 <Text style={styles.eventTitle} numberOfLines={2}>{event.title}</Text>
                 <View style={styles.eventArrowRow}>
                   <Ionicons name="chevron-forward" size={14} color="#b0adb8" />
@@ -256,6 +279,7 @@ export default function InterpretationLayer() {
         visible={!!selectedEvent}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setSelectedEvent(null)}
       >
         <View style={styles.modalOverlay}>
@@ -265,15 +289,23 @@ export default function InterpretationLayer() {
             onPress={() => setSelectedEvent(null)}
           />
           <View style={styles.modalCard}>
-            {/* 上方：拍摄的图片或视频 */}
+            {/* 上方：拍摄的图片或视频（点击可查看全图） */}
             {selectedEvent?.isVideo && selectedEvent.videoUri ? (
               <EventVideoPlayer uri={selectedEvent.videoUri} />
             ) : selectedEvent?.photoUri ? (
-              <Image
-                source={{ uri: selectedEvent.photoUri }}
-                style={styles.modalImage}
-                contentFit="cover"
-              />
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setShowFullImage(true)}
+              >
+                <Image
+                  source={{ uri: selectedEvent.photoUri }}
+                  style={styles.modalImage}
+                  contentFit="cover"
+                />
+                <View style={styles.fullImageBadge}>
+                  <Ionicons name="expand-outline" size={18} color="#fff" />
+                </View>
+              </TouchableOpacity>
             ) : null}
             {/* 下方：详细介绍文字 */}
             <View style={styles.modalBody}>
@@ -314,6 +346,15 @@ export default function InterpretationLayer() {
               ) : (
                 <Text style={styles.modalTitle}>{selectedEvent?.title}</Text>
               )}
+              {selectedEvent?.weather && selectedEvent.weather !== 'Unknown' && editingEventId !== selectedEvent.id ? (
+                <View style={styles.modalWeatherRow}>
+                  <Ionicons name="partly-sunny-outline" size={13} color="#585594" />
+                  <Text style={styles.modalWeather}>
+                    {selectedEvent.weather}
+                    {selectedEvent.temperature && selectedEvent.temperature !== 'N/A' ? `, ${selectedEvent.temperature}°C` : ''}
+                  </Text>
+                </View>
+              ) : null}
               {editingEventId === selectedEvent?.id ? (
                 <TextInput
                   style={styles.editDetailInput}
@@ -324,7 +365,13 @@ export default function InterpretationLayer() {
                   placeholderTextColor="#b0adb8"
                 />
               ) : selectedEvent?.additional_info ? (
-                <Text style={styles.modalDetail}>{selectedEvent.additional_info}</Text>
+                <ScrollView
+                  style={styles.modalDetailBox}
+                  showsVerticalScrollIndicator
+                  nestedScrollEnabled
+                >
+                  <Text style={styles.modalDetail}>{selectedEvent.additional_info}</Text>
+                </ScrollView>
               ) : null}
               <View style={styles.editingActionsRow}>
                 {editingEventId === selectedEvent?.id ? (
@@ -356,6 +403,37 @@ export default function InterpretationLayer() {
               </View>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* 全屏图片查看 Modal */}
+      <Modal
+        visible={showFullImage && !!selectedEvent?.photoUri}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowFullImage(false)}
+      >
+        <View style={styles.fullImageModalOverlay}>
+          <TouchableOpacity
+            style={styles.fullImageBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowFullImage(false)}
+          />
+          {selectedEvent?.photoUri ? (
+            <Image
+              source={{ uri: selectedEvent.photoUri }}
+              style={styles.fullImageContent}
+              contentFit="contain"
+            />
+          ) : null}
+          <TouchableOpacity
+            style={styles.fullImageCloseBtn}
+            onPress={() => setShowFullImage(false)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="close" size={26} color="#fff" />
+          </TouchableOpacity>
         </View>
       </Modal>
     </View>
@@ -394,12 +472,19 @@ const styles = StyleSheet.create({
   eventTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   eventTime: { fontSize: 18, fontWeight: '700', color: '#585594' },
   eventLocation: { flex: 1, fontSize: 12, fontWeight: '600', color: '#787681', textAlign: 'right' },
+  eventWeather: { fontSize: 11, fontWeight: '600', color: '#787681', marginTop: 2 },
   eventTitle: { fontSize: 16, fontWeight: '700', color: '#1b1c19', marginTop: 4 },
   eventArrowRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6 },
 
   // Photo Detail Modal（半透明黑遮罩 + 大卡片）
-  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
-  modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(27,28,25,0.6)' },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(27,28,25,0.6)',
+  },
+  modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   modalCard: {
     width: '100%', maxHeight: '80%', backgroundColor: '#fff', borderRadius: 24,
     overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
@@ -407,12 +492,32 @@ const styles = StyleSheet.create({
   },
   modalImage: { width: '100%', height: 220, backgroundColor: '#f5f3ee' },
   modalVideo: { width: '100%', height: 220, backgroundColor: '#1b1c19' },
+  fullImageBadge: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(27,28,25,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   modalBody: { padding: 20 },
   modalTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   modalTime: { fontSize: 18, fontWeight: '700', color: '#585594' },
   modalLocation: { flex: 1, fontSize: 13, fontWeight: '600', color: '#787681', textAlign: 'right' },
   modalTitle: { fontSize: 18, fontWeight: '700', color: '#1b1c19', marginTop: 6 },
-  modalDetail: { fontSize: 14, color: '#474650', lineHeight: 22, marginTop: 8, fontStyle: 'italic' },
+  modalWeatherRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  modalWeather: { fontSize: 13, fontWeight: '600', color: '#585594' },
+  modalDetailBox: {
+    maxHeight: 160,
+    marginTop: 8,
+    backgroundColor: '#f5f3ee',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+  },
+  modalDetail: { fontSize: 14, color: '#474650', lineHeight: 22, paddingVertical: 8, fontStyle: 'italic' },
   editToggleBtn: {
     padding: 6,
     backgroundColor: '#585594',
@@ -455,6 +560,27 @@ const styles = StyleSheet.create({
   editCancelText: { color: '#585594', fontWeight: '700', fontSize: 14 },
   modalCloseBtn: { alignSelf: 'center', marginTop: 18, backgroundColor: '#585594', paddingVertical: 10, paddingHorizontal: 28, borderRadius: 20 },
   modalCloseText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
+  // 全屏图片查看
+  fullImageModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullImageBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  fullImageContent: { width: '100%', height: '100%' },
+  fullImageCloseBtn: {
+    position: 'absolute',
+    top: 54,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
   // Floating Buttons
   floatingActions: { position: 'absolute', bottom: 100, left: 18, right: 18, flexDirection: 'row', gap: 10 },

@@ -1,0 +1,22 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 1. 定义经典的 Gemini 蓝紫粉渐变 -->
+  <defs>
+    <linearGradient id="gemini-star-gradient" x1="120" y1="120" x2="392" y2="392" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4E82EE" />   <!-- Google 蓝 -->
+      <stop offset="50%" stop-color="#A259FF" />  <!-- 灵动紫 -->
+      <stop offset="100%" stop-color="#F2728C" /> <!-- 暖光粉 -->
+    </linearGradient>
+  </defs>
+
+  <!-- 2. 奶油白圆角 App 底座背景 (iOS 规范圆角) -->
+  <rect width="512" height="512" rx="112" fill="#F9F8F3"/>
+
+  <!-- 3. 完美的 Gemini 原生四角星（纯粹充填与优雅曲线） -->
+  <path d="
+    M 256 100 
+    C 256 186.152 186.152 256 100 256 
+    C 186.152 256 256 325.848 256 412 
+    C 256 325.848 325.848 256 412 256 
+    C 325.848 256 256 186.152 256 100 Z
+  " fill="url(#gemini-star-gradient)"/>
+</svg>

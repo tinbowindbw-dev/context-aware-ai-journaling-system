@@ -166,6 +166,8 @@ const checkAndFilterLocation = async (isForegroundTrigger: boolean = false) => {
         lastRequestStatus: 'throttled',
         lastError: null,
       });
+      // 即使被 time gate 拦下，也照常评估 clips，避免 clip 生成被饥饿
+      await evaluateRecentClips();
       // Return NewData for keep-alive even when throttled
       return BackgroundFetch.BackgroundFetchResult.NewData;
     }

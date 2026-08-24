@@ -50,6 +50,9 @@ export default function EventLayer() {
   const [isLoadingHighlights, setIsLoadingHighlights] = useState(false);
   const [highlightsContent, setHighlightsContent] = useState('');
 
+  // Timeline 展开状态（全屏查看事件列表）
+  const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
+
   // --- AUTOMATIC LOCATION & WEATHER TRACKER ON APP OPEN ---
   useEffect(() => {
     const trackCurrentLocationAndWeather = async () => {
@@ -509,7 +512,9 @@ export default function EventLayer() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      {/* 固定头部区域：Header + AI Reflection + 快捷操作（不随下方内容滚动） */}
+      {!isTimelineExpanded && (
+      <View style={styles.fixedArea}>
         
         {/* Header */}
         <View style={styles.header}>
@@ -649,9 +654,29 @@ export default function EventLayer() {
           </View>
         )}
 
-        {/* Timeline Event List */}
-        <Text style={styles.timelineSectionTitle}>Today's Journey</Text>
+      </View>
+      )}
 
+      {/* Today's Journey 标题行 + 展开/收起按钮（固定在区域顶部） */}
+      <View style={[styles.timelineHeaderRow, isTimelineExpanded && styles.timelineHeaderRowExpanded]}>
+        <Text style={styles.timelineSectionTitle}>Today's Journey</Text>
+        <TouchableOpacity
+          style={styles.expandBtn}
+          onPress={() => setIsTimelineExpanded((v) => !v)}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name={isTimelineExpanded ? 'contract-outline' : 'expand-outline'} size={16} color="#585594" />
+          <Text style={styles.expandBtnText}>{isTimelineExpanded ? 'Collapse' : 'Expand'}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 下方：Today's Journey 独立滑动区 */}
+      <ScrollView
+        style={styles.timelineScroll}
+        contentContainerStyle={styles.timelineListContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.timelineList}>
           {events.slice().sort((a, b) => b.timestamp - a.timestamp).map((event) => (
             <View key={event.id} style={styles.journeyCard}>
@@ -698,26 +723,25 @@ export default function EventLayer() {
             </View>
           ))}
         </View>
+      </ScrollView>
 
-        {/* Rename Modal */}
-        {isRenameModalVisible && (
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalHeader}>Rename Log</Text>
-              <TextInput style={styles.renameInput} value={tempRenameTitle} onChangeText={setTempRenameTitle} autoFocus />
-              <View style={styles.modalActions}>
-                <TouchableOpacity onPress={() => setIsRenameModalVisible(false)} style={styles.modalCancelBtn}>
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => { if (eventToRename) renameEvent(eventToRename.id, tempRenameTitle); setIsRenameModalVisible(false); }} style={styles.modalConfirmBtn}>
-                  <Text style={styles.modalConfirmText}>Save</Text>
-                </TouchableOpacity>
-              </View>
+      {/* Rename Modal */}
+      {isRenameModalVisible && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalHeader}>Rename Log</Text>
+            <TextInput style={styles.renameInput} value={tempRenameTitle} onChangeText={setTempRenameTitle} autoFocus />
+            <View style={styles.modalActions}>
+              <TouchableOpacity onPress={() => setIsRenameModalVisible(false)} style={styles.modalCancelBtn}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { if (eventToRename) renameEvent(eventToRename.id, tempRenameTitle); setIsRenameModalVisible(false); }} style={styles.modalConfirmBtn}>
+                <Text style={styles.modalConfirmText}>Save</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        )}
-
-      </ScrollView>
+        </View>
+      )}
 
       <Modal
         visible={showVideoCamera}
@@ -757,7 +781,13 @@ export default function EventLayer() {
       </Modal>
 
       {/* Highlights Modal — Full AI Analysis */}
-      {showHighlights && (
+      <Modal
+        visible={showHighlights}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowHighlights(false)}
+      >
         <View style={styles.highlightsOverlay}>
           <View style={styles.highlightsFullContent}>
             <View style={styles.highlightsModalHeader}>
@@ -781,16 +811,18 @@ export default function EventLayer() {
             )}
           </View>
         </View>
-      )}
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fbf9f4' },
-  scrollContent: { paddingHorizontal: 18, paddingTop: 50, paddingBottom: 130 },
+  fixedArea: { paddingHorizontal: 18, paddingTop: 56 },
 
   header: { marginBottom: 16 },
+  timelineScroll: { flex: 1, paddingHorizontal: 18 },
+  timelineListContent: { paddingBottom: 130 },
   greetingSubText: { fontSize: 16, color: '#787681', fontWeight: '500' },
   headerDateTitle: { fontSize: 32, fontWeight: '700', color: '#1b1c19', marginTop: 2 },
 
@@ -850,7 +882,28 @@ const styles = StyleSheet.create({
   recordButtonInner: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#ff5b68' },
   recordHint: { position: 'absolute', bottom: 20, alignSelf: 'center', color: '#fff', fontSize: 12, fontWeight: '600' },
 
-  timelineSectionTitle: { fontSize: 18, fontWeight: '700', color: '#1b1c19', marginBottom: 12, paddingLeft: 2 },
+  timelineSectionTitle: { fontSize: 18, fontWeight: '700', color: '#1b1c19' },
+  timelineHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  timelineHeaderRowExpanded: { paddingTop: 56 },
+  expandBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#e3dfff',
+  },
+  expandBtnText: { fontSize: 12, fontWeight: '700', color: '#585594' },
   timelineList: { gap: 12 },
   journeyCard: {
     backgroundColor: '#FFFFFF',
@@ -900,15 +953,10 @@ const styles = StyleSheet.create({
 
   // Highlights Modal styles — centered card + dark overlay, locks screen
   highlightsOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     backgroundColor: 'rgba(27,28,25,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 999,
   },
   highlightsFullContent: {
     width: '88%',

@@ -138,7 +138,7 @@ def generate_title_from_image(base64_image: str) -> tuple[str, str]:
             "content": [
                 {
                     "type": "text",
-                    "text": "What event is happening in this photo? Summarize it as a short English event title (max 5 words, e.g., 'Having coffee', 'Working at office', 'Walking in the park', 'Cooking dinner'). Also, provide a detailed description of the photo to be used as context for a diary entry. Do not use Chinese characters. Output format MUST BE JSON: {\"title\": \"<short title>\", \"description\": \"<detailed description>\"}"
+                    "text": "What event is happening in this photo? Summarize it as a short English event title (max 5 words, e.g., 'Having coffee', 'Working at office', 'Walking in the park', 'Cooking dinner'). Also provide a concise description of the photo for a diary entry (MAX 50 words, 2-3 sentences, factual and natural). Do not use Chinese characters. Output format MUST BE JSON: {\"title\": \"<short title>\", \"description\": \"<concise description>\"}"
                 },
                 {
                     "type": "image_url",
@@ -178,6 +178,10 @@ def generate_title_from_image(base64_image: str) -> tuple[str, str]:
 
     title = (parsed.get("title") or "Photo Event").strip()
     description = (parsed.get("description") or "A photo uploaded by the user.").strip()
+
+    # 保险：即使模型超长输出，也截断到合理范围（约 300 字符）
+    if len(description) > 300:
+        description = description[:297].rstrip() + "..."
     return title, description
 
 

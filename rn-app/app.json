@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "rn-app",
-    "slug": "rn-app",
+    "name": "Journal",
+    "slug": "journal",
     "version": "1.0.1",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "rnapp",
+    "scheme": "journal",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
@@ -18,7 +18,7 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "This app records your daily path to help you reflect on your day and co-construct your story.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.anonymous.rn-app"
+      "bundleIdentifier": "com.latte-lab.journal"
     },
     "android": {
       "adaptiveIcon": {
@@ -38,7 +38,7 @@
         "WAKE_LOCK",
         "POST_NOTIFICATIONS"
       ],
-      "package": "com.anonymous.rnapp",
+      "package": "com.latte-lab.journal",
       "versionCode": 2
     },
     "web": {
