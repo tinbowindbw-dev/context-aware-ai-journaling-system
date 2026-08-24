@@ -2,7 +2,7 @@ const { withMainApplication, withDangerousMod } = require('@expo/config-plugins'
 const fs = require('fs');
 const path = require('path');
 
-const NATIVE_LOCATION_PACKAGE_KT = `package com.latte-lab.journal
+const NATIVE_LOCATION_PACKAGE_KT = `package com.lattelab.journal
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
@@ -22,7 +22,7 @@ class NativeLocationPackage : ReactPackage {
 }
 `;
 
-const NATIVE_LOCATION_MODULE_KT = `package com.latte-lab.journal
+const NATIVE_LOCATION_MODULE_KT = `package com.lattelab.journal
 
 import android.Manifest
 import android.content.Context
@@ -220,10 +220,10 @@ const withNativeLocation = (config) => {
     const applyBlockRegex = /PackageList\(this\)\.packages\.apply\s*\{/g;
     
     // 1. Add Import
-    if (!content.includes('import com.latte-lab.journal.NativeLocationPackage')) {
+    if (!content.includes('import com.lattelab.journal.NativeLocationPackage')) {
       content = content.replace(
         /import com\.facebook\.react\.ReactPackage/,
-        'import com.facebook.react.ReactPackage\nimport com.latte-lab.journal.NativeLocationPackage'
+        'import com.facebook.react.ReactPackage\nimport com.lattelab.journal.NativeLocationPackage'
       );
     }
 
@@ -255,7 +255,7 @@ const withNativeLocation = (config) => {
     'android',
     async (config) => {
       const projectRoot = config.modRequest.projectRoot;
-      const packagePath = 'com/latte-lab/journal';
+      const packagePath = 'com/lattelab/journal';
       const androidSrcRoot = path.join(
         projectRoot,
         'android/app/src/main/java',
