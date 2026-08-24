@@ -63,7 +63,7 @@ def health():
 
 
 @app.post("/generate_story_image")
-async def generate_story_image(data: StoryIllustrationRequest):
+def generate_story_image(data: StoryIllustrationRequest):
     """Start an asynchronous diary illustration task."""
     try:
         task_id = create_story_illustration_task(data.story_text, data.mood)
@@ -74,7 +74,7 @@ async def generate_story_image(data: StoryIllustrationRequest):
 
 
 @app.get("/story_image_task/{task_id}")
-async def story_image_task(task_id: str):
+def story_image_task(task_id: str):
     """Get the status and image URL of an illustration task."""
     try:
         return {"success": True, **get_story_illustration_task(task_id)}

@@ -4,7 +4,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -28,7 +28,9 @@ import { useStore } from '../../store/useStore';
 export default function EventLayer() {
   const { events, addEvent, renameEvent, deleteEvent, _hasHydrated } = useStore();
   const cameraRef = useRef<CameraView>(null);
+  const recordingStartedAt = useRef(0);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
 
   const [showInput, setShowInput] = useState(false);
   const [manualTitle, setManualTitle] = useState('');
@@ -240,19 +242,34 @@ export default function EventLayer() {
   const startVideoRecording = async () => {
     if (!cameraRef.current || isRecordingVideo) return;
 
+    // 录制视频需要麦克风权限（RECORD_AUDIO），Android 上必须显式请求
+    if (!microphonePermission?.granted) {
+      const permission = await requestMicrophonePermission();
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Microphone access is needed to record a video.');
+        return;
+      }
+    }
+
+    recordingStartedAt.current = Date.now();
     setIsRecordingVideo(true);
     try {
       const video = await cameraRef.current.recordAsync({ maxDuration: 15 });
       if (video?.uri) await handleRecordedVideo(video.uri);
     } catch (error) {
       console.error('Video recording error:', error);
-      Alert.alert('Recording Failed', 'Unable to record the video.');
+      Alert.alert(
+        'Recording Failed',
+        error instanceof Error ? error.message : 'Unable to record the video.'
+      );
     } finally {
       setIsRecordingVideo(false);
     }
   };
 
   const stopVideoRecording = () => {
+    // 防止快速点击：录制初始化完成前调用 stopRecording 会抛错
+    if (Date.now() - recordingStartedAt.current < 300) return;
     if (cameraRef.current && isRecordingVideo) {
       cameraRef.current.stopRecording();
     }

@@ -4,6 +4,7 @@ import os
 import socket
 import time as _time
 import datetime
+import uuid
 from openai import OpenAI
 
 # Get API keys from environment variables.
@@ -13,7 +14,12 @@ MODEL = "deepseek-chat"
 
 QWEN_API_KEY = os.getenv("QWEN_API_KEY")
 QWEN_ENDPOINT = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1" #
-QWEN_IMAGE_TASK_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-to-image/image-synthesis"
+QWEN_IMAGE_ENDPOINT = "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+QWEN_IMAGE_MODEL = "qwen-image"
+QWEN_IMAGE_SIZE = "1328*1328"
+
+# In-memory cache for synchronous image generation results (task_id -> result dict)
+_story_image_cache: dict = {}
 
 
 def get_common_headers():
@@ -25,7 +31,12 @@ def get_common_headers():
 
 
 def create_story_illustration_task(story_text: str, mood: str = None) -> str:
-    """Create an asynchronous Qwen image task and return its task id."""
+    """Generate a diary illustration synchronously via Qwen-image and cache the result.
+
+    The DashScope international endpoint only supports synchronous calls for
+    qwen-image, so the image is generated during this request and the result is
+    cached under a synthetic task id for the polling endpoint to consume.
+    """
     if not QWEN_API_KEY:
         raise RuntimeError("QWEN_API_KEY is not configured on the server.")
     if not story_text.strip():
@@ -40,43 +51,45 @@ def create_story_illustration_task(story_text: str, mood: str = None) -> str:
         f"for a journaling app. {mood_text}\nDiary entry:\n{story_text[:2000]}"
     )
     response = requests.post(
-        QWEN_IMAGE_TASK_ENDPOINT,
+        QWEN_IMAGE_ENDPOINT,
         headers={
             "Authorization": f"Bearer {QWEN_API_KEY}",
             "Content-Type": "application/json",
-            "X-DashScope-Async": "enable",
         },
         json={
-            "model": "wanx-v1",
-            "input": {"prompt": prompt},
-            "parameters": {"size": "1024*1024", "n": 1},
+            "model": QWEN_IMAGE_MODEL,
+            "input": {
+                "messages": [{"role": "user", "content": [{"text": prompt}]}]
+            },
+            "parameters": {"size": QWEN_IMAGE_SIZE, "n": 1},
         },
-        timeout=60,
+        timeout=90,
     )
     response.raise_for_status()
-    task_id = response.json().get("output", {}).get("task_id")
-    if not task_id:
-        raise RuntimeError(f"Image task id missing: {response.text[:300]}")
+    data = response.json()
+    choices = data.get("output", {}).get("choices", [])
+    if not choices:
+        raise RuntimeError(f"Image generation returned no output: {str(data)[:300]}")
+    content = choices[0].get("message", {}).get("content", []) or []
+    image_url = content[0].get("image") if content else None
+    if not image_url:
+        raise RuntimeError(f"Image generation returned no image URL: {str(data)[:300]}")
+
+    task_id = f"sync_{uuid.uuid4().hex}"
+    _story_image_cache[task_id] = {
+        "status": "SUCCEEDED",
+        "image_url": image_url,
+        "message": None,
+    }
     return task_id
 
 
 def get_story_illustration_task(task_id: str) -> dict:
-    """Return normalized status for an asynchronous Qwen image task."""
-    response = requests.get(
-        f"https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}",
-        headers={"Authorization": f"Bearer {QWEN_API_KEY}"},
-        timeout=30,
-    )
-    response.raise_for_status()
-    output = response.json().get("output", {})
-    status = output.get("task_status", "UNKNOWN")
-    result = output.get("results", []) or []
-    image_url = result[0].get("url") if result else None
-    return {
-        "status": status,
-        "image_url": image_url,
-        "message": output.get("message"),
-    }
+    """Return the cached result for a synchronous illustration task."""
+    result = _story_image_cache.get(task_id)
+    if result is None:
+        return {"status": "PENDING", "image_url": None, "message": None}
+    return result
 
 
 def translate_location_to_en(location_input: str) -> str:
