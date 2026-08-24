@@ -2,6 +2,7 @@
   "expo": {
     "name": "Journal",
     "slug": "journal",
+    "owner": "tinner-googles-team",
     "version": "1.0.1",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -18,7 +19,7 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "This app records your daily path to help you reflect on your day and co-construct your story.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.latte-lab.journal"
+      "bundleIdentifier": "com.lattelab.journal"
     },
     "android": {
       "adaptiveIcon": {
@@ -36,9 +37,16 @@
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_LOCATION",
         "WAKE_LOCK",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.latte-lab.journal",
+      "package": "com.lattelab.journal",
       "versionCode": 2
     },
     "web": {
@@ -85,7 +93,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "366ef6ef-c407-4de9-a143-7363bafbc2a1"
+        "projectId": "3aa38f3d-7acf-4d38-95b6-ccf9528b004a"
       }
     }
   }
