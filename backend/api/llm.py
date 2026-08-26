@@ -206,7 +206,7 @@ def generate_title_from_video(video_bytes: bytes, filename: str = "video.mp4") -
         raise ValueError("No video data was provided.")
 
     video_model = "qwen2.5-vl-72b-instruct"
-    upload_endpoint = "https://dashscope.aliyuncs.com/api/v1/uploads"
+    upload_endpoint = "https://dashscope-intl.aliyuncs.com/api/v1/uploads"
     upload_headers = {"Authorization": f"Bearer {QWEN_API_KEY}"}
     mime_type = "video/quicktime" if filename.lower().endswith(".mov") else "video/mp4"
 
